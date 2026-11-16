@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Chesslite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: #07060c; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+  body { font-family: 'Silkscreen', 'Courier New', monospace; color: #fff3d6; }
+  canvas { position: absolute; left: 0; top: 0; image-rendering: pixelated; image-rendering: crisp-edges; cursor: pointer; }
+  #hud { position: absolute; inset: 0; pointer-events: none; text-shadow: 3px 3px 0 #120c1c; }
+  .coin { display: inline-block; width: .7em; height: .7em; background: #ffc83d; box-shadow: inset -.14em -.14em 0 #c9781f, 0 0 0 .14em #120c1c; margin-right: .35em; vertical-align: baseline; }
+  #gold { position: absolute; left: 24px; top: 18px; font-size: 34px; font-weight: 700; transition: transform .12s; transform-origin: left center; }
+  #gold.bump { transform: scale(1.35); color: #ffe27a; transition: none; }
+  #track { position: absolute; left: 50%; top: 24px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; }
+  #track i { width: 12px; height: 12px; background: #2a2338; box-shadow: 0 0 0 3px #120c1c; }
+  #track i.boss { width: 16px; height: 16px; transform: rotate(45deg); margin: 0 5px; background: #4a2030; }
+  #track i.done { background: #fff3d6; }
+  #track i.boss.done { background: #ff5a4a; }
+  #track i.now { background: #ffc83d; animation: blink .7s steps(2) infinite; }
+  #timer { position: absolute; left: 50%; top: 58px; transform: translateX(-50%); font-size: 26px; display: flex; gap: 8px; align-items: center; }
+  #timer i { width: 10px; height: 10px; background: #2a2338; box-shadow: 0 0 0 3px #120c1c; }
+  #timer i.on { background: #ff5a4a; }
+  #big { position: absolute; left: 0; right: 0; top: 34%; text-align: center; font-size: min(11vw, 120px); font-weight: 700; letter-spacing: .06em; opacity: 0; text-shadow: 6px 6px 0 #120c1c; }
+  #big small { display: block; font-size: .22em; font-weight: 400; margin-top: 1em; animation: blink 1s steps(2) infinite; }
+  #big.show { opacity: 1; animation: slam .35s cubic-bezier(.2, 2.2, .4, 1); }
+  #big.flash { animation: slam .35s cubic-bezier(.2, 2.2, .4, 1), out .4s 1.1s forwards; opacity: 1; }
+  #bar { position: absolute; left: 0; right: 0; bottom: 26px; display: none; justify-content: center; gap: 18px; }
+  #bar.on { display: flex; }
+  button { pointer-events: auto; font: inherit; font-size: 26px; font-weight: 700; color: #fff3d6; background: #3b2f58; border: 0; padding: 10px 22px 12px; cursor: pointer;
+    box-shadow: 0 0 0 4px #120c1c, inset 0 -6px 0 #241b3a, inset 0 4px 0 #56467c; text-shadow: 2px 2px 0 #120c1c; }
+  button:hover { background: #4c3d70; transform: translateY(-2px); }
+  button:active { transform: translateY(3px); box-shadow: 0 0 0 4px #120c1c, inset 0 -2px 0 #241b3a; }
+  #go { background: #2f7a55; box-shadow: 0 0 0 4px #120c1c, inset 0 -6px 0 #1d5238, inset 0 4px 0 #49a877; padding-left: 34px; padding-right: 34px; }
+  #go:hover { background: #3b966a; }
+  .price { position: absolute; font-size: 22px; font-weight: 700; transform: translate(-50%, -50%); white-space: nowrap; display: none; }
+  .price.no { color: #ff6b5a; }
+  #tip { position: absolute; display: none; background: #120c1c; padding: 6px 10px 8px; font-size: 14px; box-shadow: 0 0 0 3px #fff3d6; text-shadow: none; transform: translate(-50%, -140%); white-space: nowrap; text-align: center; }
+  #tip b { display: block; font-size: 18px; color: #ffc83d; }
+  #err { position: absolute; left: 8px; bottom: 8px; color: #ff6b5a; font: 12px monospace; white-space: pre-wrap; max-width: 90vw; }
+  @keyframes blink { 50% { opacity: .35; } }
+  @keyframes slam { from { transform: scale(2.4); opacity: 0; } }
+  @keyframes out { to { opacity: 0; transform: scale(.9); } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="gold"><i class="coin"></i><span>0</span></div>
+  <div id="track"></div>
+  <div id="timer"></div>
+  <div id="big"></div>
+  <div class="price"></div><div class="price"></div><div class="price"></div><div class="price"></div>
+  <div id="bar"><button id="reroll">&#8635; <i class="coin"></i><span>1</span></button><button id="go">&#9654;</button></div>
+  <div id="tip"></div>
+  <div id="err"></div>
+</div>
+<script>
+  addEventListener('error', e => { document.getElementById('err').textContent += (e.message || e) + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno + '\n'; });
+  addEventListener('unhandledrejection', e => { document.getElementById('err').textContent += 'async: ' + (e.reason && e.reason.stack || e.reason) + '\n'; });
+</script>
+<script src="js/rules.js"></script>
+<script src="js/sdf.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/gfx.js"></script>
+<script src="js/game.js"></script>
+<script>
+  { const s = new URLSearchParams(location.search).get('shot'); if (s) document.write('<img src="/slow?ms=' + s + '" style="display:none">'); }
+</script>
+</body>
+</html>
