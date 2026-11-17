@@ -9,13 +9,14 @@
   const ORTH = D8.slice(0, 4), DIAG = D8.slice(4);
   const KN = [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]];
 
-  const state = () => ({ b: Array(N).fill(null), f: { shield: 0 }, turn: 0, again: null, w: -1, doom: null, nid: 1e6 });
-  const clone = st => ({ b: st.b.slice(), f: { ...st.f }, turn: st.turn, again: st.again, w: st.w, doom: st.doom, nid: st.nid });
+  const state = () => ({ b: Array(N).fill(null), f: { shield: 0 }, turn: 0, again: null, w: -1, doom: null, nid: 1e6, fz: null });
+  const clone = st => ({ b: st.b.slice(), f: { ...st.f }, turn: st.turn, again: st.again, w: st.w, doom: st.doom, nid: st.nid, fz: st.fz });
 
   // move: {f, t, k}  k: 0 move, 1 capture, 2 ranged shot (shooter stays), 3 hook pull, 4 ram push
   // p.hp = hits left (golem)
   function moves(st, i, out = []) {
     const p = st.b[i]; if (!p) return out;
+    if (st.fz && st.fz[i] && p.t !== 'K') return out; // frozen in place (frost boss)
     const x = i % W, y = (i / W) | 0, s = p.s, b = st.b;
     const step = (dx, dy, mode) => { // mode 0 both, 1 move only, 2 capture only
       const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) return;
@@ -113,6 +114,7 @@
       const { at, r } = boomQ.shift(), x = at % W, y = (at / W) | 0;
       ev && ev.push({ e: 'boom', at, r });
       for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (r > 1 && dx && dy && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) continue; // big blast = 3x3 plus a cross
         const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
         const j = nx + ny * W, q = st.b[j];
         if (q && q.t !== 'K') kill(st, j, ev, at, boomQ);

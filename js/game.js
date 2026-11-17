@@ -23,20 +23,23 @@
     shield: [9, 'AEGIS', 'blocks 1 capture'], frenzy: [12, 'FURY', 'capture = go again'], crown: [8, 'CROWN', 'king strides 2'], wings: [6, 'WINGS', 'pawns sidestep'],
     purse: [7, 'PURSE', '+1 per capture'], bolt: [8, 'BOLT', 'smites a foe'], egg: [6, 'EGG', 'free pawn'], thorns: [8, 'THORNS', 'pawns bite back'],
     heart: [12, 'HEART', 'king takes 2 hits'], boots: [6, 'BOOTS', 'lava-proof'], anchor: [6, 'ANCHOR', 'wind-proof'], piggy: [8, 'PIGGY', '+1 per 5 saved'],
-    clover: [6, 'CLOVER', 'free reroll'], fuse: [7, 'FUSE', 'bombs blast 5x5'], scope: [7, 'SCOPE', 'cannon, hook +3 range'], horn: [7, 'HORN', 'pawns start ahead'],
+    clover: [6, 'CLOVER', 'free reroll'], fuse: [9, 'FUSE', 'bigger bomb blasts'], scope: [7, 'SCOPE', 'cannon, hook +3 range'], horn: [7, 'HORN', 'pawns start ahead'],
   };
-  const BOSS = ['inferno', 'tempest', 'chaos'];
+  const BOSS = ['inferno', 'tempest', 'chaos', 'hive', 'frost', 'eclipse'];
   CL.data = { NAMES, PRICE, RELICS, MODEL };
   const seen = t => CL.codex && CL.codex.seen(t), seenRel = k => CL.codex && CL.codex.seenRel(k);
   const PA = [.97, .92, .8], PB = [.25, .78, .82], EA = [.36, .27, .5], EB = [.98, .36, .32];
-  const BOSSCOL = { inferno: [[.3, .13, .12], [1, .6, .15]], tempest: [[.2, .32, .42], [.7, 1, 1]], chaos: [[.14, .1, .2], [1, .3, .9]] };
-  const C = { sel: [1, .85, .3], move: [.3, .95, 1], danger: [1, .6, .2], cap: [1, .25, .2], foe: [.85, .3, .7], hover: [1, 1, 1], last: [.7, .4, .9], lava: [1, .5, .1], wind: [.8, 1, 1], gold: [1, .8, .3], no: [.5, .3, .35] };
+  const BOSSCOL = { inferno: [[.3, .13, .12], [1, .6, .15]], tempest: [[.2, .32, .42], [.7, 1, 1]], chaos: [[.14, .1, .2], [1, .3, .9]], hive: [[.32, .22, .05], [1, .78, .2]], frost: [[.2, .3, .45], [.7, .95, 1]], eclipse: [[.08, .05, .12], [.8, .35, 1]] };
+  const C = { sel: [1, .85, .3], move: [.3, .95, 1], danger: [1, .6, .2], cap: [1, .25, .2], foe: [.85, .3, .7], hover: [1, 1, 1], last: [.7, .4, .9], lava: [1, .5, .1], wind: [.8, 1, 1], gold: [1, .8, .3], no: [.5, .3, .35], ice: [.3, .75, 1], hive: [1, .75, .2], fog: [.04, .03, .08] };
   const TH = {
     a0: { skyA: [.06, .07, .2], skyB: [.2, .38, .52], tA: [.9, .84, .7], tB: [.33, .52, .56], glow: [.3, .95, 1], sun: [1.1, 1.04, .92], amb: [.42, .45, .7] },
     a1: { skyA: [.12, .05, .24], skyB: [.55, .27, .52], tA: [.92, .8, .82], tB: [.5, .36, .62], glow: [1, .5, .9], sun: [1.1, 1, .98], amb: [.5, .4, .7] },
     a2: { skyA: [.03, .03, .09], skyB: [.3, .13, .24], tA: [.8, .78, .8], tB: [.3, .29, .4], glow: [1, .3, .45], sun: [1.05, 1, 1.05], amb: [.4, .38, .6] },
     inferno: { skyA: [.16, .03, .02], skyB: [.8, .32, .08], tA: [.86, .68, .5], tB: [.4, .22, .2], glow: [1, .6, .1], sun: [1.2, .98, .76], amb: [.6, .36, .4] },
     tempest: { skyA: [.07, .12, .17], skyB: [.42, .58, .6], tA: [.8, .88, .88], tB: [.3, .44, .52], glow: [.7, 1, 1], sun: [1, 1.06, 1.1], amb: [.42, .52, .66] },
+    hive: { skyA: [.14, .08, .02], skyB: [.62, .42, .1], tA: [.95, .82, .5], tB: [.55, .38, .15], glow: [1, .75, .2], sun: [1.15, 1.02, .8], amb: [.6, .48, .35] },
+    frost: { skyA: [.06, .1, .18], skyB: [.5, .68, .82], tA: [.74, .8, .9], tB: [.34, .44, .58], glow: [.6, .9, 1], sun: [1.05, 1.08, 1.15], amb: [.5, .58, .75] },
+    eclipse: { skyA: [.02, .01, .04], skyB: [.12, .05, .18], tA: [.6, .56, .68], tB: [.22, .18, .3], glow: [.75, .4, 1], sun: [.8, .75, .95], amb: [.3, .26, .45] },
     chaos: { skyA: [.08, .02, .12], skyB: [.3, .1, .4], tA: [.85, .8, .9], tB: [.28, .22, .4], glow: [1, .3, .9], sun: [1.1, 1, 1.1], amb: [.45, .36, .62] },
   };
 
@@ -210,7 +213,7 @@
   }
   function boomFx(p, r = 1) {
     const cx = Math.round(p[0] + 2.5), cy = Math.round(2.5 - p[2]); // blast area flashes red
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < 6 && y < 6) blastT[x + y * 6] = 1.6; }
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { if (r > 1 && dx && dy && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) continue; const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < 6 && y < 6) blastT[x + y * 6] = 1.6; }
     burst([p[0], .3, p[2]], [1, .55, .15], 60, 8); burst([p[0], .3, p[2]], [1, .9, .4], 40, 5); burst([p[0], .3, p[2]], [.25, .2, .25], 30, 6, { g: 3 });
     shake = Math.max(shake, .7); sflash = .5; punch = 1.5; sfx.boom();
     for (let i = 0; i < 36; i++) { const q = TP(i), d = Math.hypot(q[0] - p[0], q[2] - p[2]); if (d < 2.2) tv[i] -= 3 / (1 + d); }
@@ -234,8 +237,8 @@
     $('#gold span').textContent = run.gold;
     $('#track').innerHTML = Array.from({ length: 9 }, (_, i) => `<i class="${i % 3 === 2 ? 'boss ' : ''}${i < run.round ? 'done' : i === run.round ? 'now' : ''}"></i>`).join('');
     let t = '';
-    if (B && (B.boss === 'tempest' || B.boss === 'chaos')) {
-      t = B.boss === 'chaos' ? '?' : B.wind[0] > 0 ? '&rarr;' : B.wind[0] < 0 ? '&larr;' : B.wind[1] > 0 ? '&uarr;' : '&darr;';
+    if (B && (B.boss === 'tempest' || B.boss === 'chaos' || B.boss === 'hive')) {
+      t = B.boss === 'chaos' ? '?' : B.boss === 'hive' ? '+' : B.wind[0] > 0 ? '&rarr;' : B.wind[0] < 0 ? '&larr;' : B.wind[1] > 0 ? '&uarr;' : '&darr;';
       t += [2, 1].map(k => `<i class="${B.timer >= k ? '' : 'on'}"></i>`).join('') + '<i></i>'.repeat(0);
     }
     $('#timer').innerHTML = t;
@@ -274,7 +277,8 @@
   }
   function newRun() {
     clearAll();
-    run = { gold: +(Q.get('g') || 3), round: +(Q.get('r') || 0), relics: [], army: [] };
+    run = { gold: +(Q.get('g') || 3), round: +(Q.get('r') || 0), relics: [], army: [], bosses: BOSS.slice().sort(() => rand() - .5).slice(0, 3) };
+    if (Q.get('boss')) run.bosses = [0, 1, 2].map(() => Q.get('boss')); // ?boss=frost forces every boss (testing)
     unitEnt(addUnit('K', 2), true);
     run.spun = Q.has('start');
     (Q.get('start') || '').split('').filter(t => PRICE[t]).forEach(t => { const s = freeSlot(t); if (s >= 0) unitEnt(addUnit(t, s), true); });
@@ -418,12 +422,12 @@
   // ------------------------------------------------------------ battle
   async function startBattle(opt) {
     phase = 'anim'; sel = peek = lastMv = null; selMoves = [];
-    const r = run.round, boss = r % 3 === 2 ? BOSS[(r / 3) | 0] : null, has = k => run.relics.includes(k);
+    const r = run.round, boss = r % 3 === 2 ? run.bosses[(r / 3) | 0] : null, has = k => run.relics.includes(k);
     theme = TH[boss || 'a' + ((r / 3) | 0)];
     const st = R.state();
     for (const u of run.army) st.b[u.slot] = { id: u.id, t: u.t, s: 0, hp: u.t === 'K' && has('heart') ? 2 : R.hpOf(u.t) };
     st.f = { shield: has('shield') ? 1 : 0, crown: has('crown'), wings: has('wings'), frenzy: has('frenzy'), thorns: has('thorns'), fuse: has('fuse'), scope: has('scope') };
-    B = { st, boss, n: 0, marks: [], wind: [1, 0], timer: 2, bonus: opt ? opt.gold : 0 };
+    B = { st, boss, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: 2, bonus: opt ? opt.gold : 0 };
     hud();
     for (const f of opt ? opt.foes : genEnemy(r)) {
       seen(f.t);
@@ -448,6 +452,8 @@
       if (c.length) { const i = pick(c), ev = [], q = []; flashRelic('bolt'); boltFx(TP(i)); R.kill(st, i, ev, i, q); R.booms(st, ev, q); await play(ev); await wait(.3); }
     }
     if (boss === 'inferno') addMarks(3);
+    if (boss === 'frost') addIce(3);
+    if (boss === 'hive') hivePick();
     if (boss === 'tempest') B.wind = pick([[1, 0], [-1, 0], [0, 1], [0, -1]]);
     doom(); hud();
     if (await checkEnd()) return;
@@ -578,8 +584,37 @@
       if (--B.timer <= 0) { await gust(); B.timer = 2; B.wind = pick([[1, 0], [-1, 0], [0, 1], [0, -1]]); }
     } else if (B.boss === 'chaos') {
       if (--B.timer <= 0) { await mutate(); B.timer = 2; }
-    }
+    } else if (B.boss === 'hive') {
+      if (--B.timer <= 0) { await spawnDrone(); B.timer = 2; } else hivePick();
+    } else if (B.boss === 'frost') await freeze();
     doom(); hud();
+  }
+  // --- hive: the queen lays a pawn near her every 2 turns (spot telegraphed a turn ahead)
+  function hivePick() {
+    const st = B.st, k = st.b.findIndex(p => p && p.s === 1 && p.t === 'K'); B.hiveAt = -1; if (k < 0) return;
+    const kx = k % 6, ky = (k / 6) | 0, free = [];
+    for (let i = 18; i < 36; i++) if (!st.b[i]) free.push([i, Math.max(Math.abs((i % 6) - kx), Math.abs(((i / 6) | 0) - ky)) + rand(.5)]);
+    free.sort((a, b) => a[1] - b[1]); if (free.length) B.hiveAt = free[0][0];
+  }
+  async function spawnDrone() {
+    const st = B.st; if (B.hiveAt < 0 || st.b[B.hiveAt]) hivePick();
+    const i = B.hiveAt; if (i < 0 || st.b.filter(p => p && p.s === 1).length > 13) return;
+    const id = uid++; st.b[i] = { id, t: 'P', s: 1, hp: 1 };
+    const e = mkEnt('pawn', TP(i), { side: 1, A: EA, B: BOSSCOL.hive[1] }); ents.set(id, e); appear(e, .25);
+    sfx.squelch(); sfx.pop(); tv[i] -= 2; burst([TP(i)[0], .4, TP(i)[2]], [1, .78, .2], 20, 3); B.hiveAt = -1;
+    await wait(.3); hivePick();
+  }
+  // --- frost: telegraphed tiles freeze; pieces on them can't move for a round, then thaw
+  function addIce(n) {
+    const free = []; for (let i = 0; i < 36; i++) if (!B.ice.some(m => m.i === i)) free.push(i);
+    for (let k = 0; k < n && free.length; k++) B.ice.push({ i: free.splice((Math.random() * free.length) | 0, 1)[0], s: 1 });
+  }
+  async function freeze() {
+    B.ice = B.ice.filter(m => m.s < 2); // thaw
+    const fz = new Uint8Array(36); let hit = false;
+    for (const m of B.ice) { m.s = 2; fz[m.i] = 1; const p = TP(m.i); tv[m.i] -= 1.5; burst([p[0], .2, p[2]], [.75, .95, 1], 14, 2.5, { g: 3 }); if (B.st.b[m.i]) hit = true; }
+    if (B.ice.length) { sfx.freeze(); if (hit) shake = Math.max(shake, .25); }
+    B.st.fz = fz; addIce(2); await wait(.2);
   }
   async function gust() {
     const st = B.st, [dx, dy] = B.wind, ev = [], q = [], slides = [];
@@ -766,7 +801,7 @@
     const p = i >= 0 && st.b[i];
     deselect(); peek = null;
     if (p && p.s === 0) select(i);
-    else if (p) { peek = i; peekMoves = R.moves(st, i); sfx.sel(); }
+    else if (p && !(B.vis && !B.vis[i] && p.t !== 'K')) { peek = i; peekMoves = R.moves(st, i); sfx.sel(); }
   }
   function setMouse(e) {
     const [w, h] = gfx.size(); mouse.x = e.clientX; mouse.y = e.clientY; mouse.nx = e.clientX / w * 2 - 1; mouse.ny = 1 - e.clientY / h * 2;
@@ -807,19 +842,27 @@
     tileK.fill(0);
     const set = (i, k, c) => { if (i < 0) return; tileK[i] = k; tile[i * 4] = c[0]; tile[i * 4 + 1] = c[1]; tile[i * 4 + 2] = c[2]; };
     if (B) {
-      if (lastMv) { set(lastMv.f, 3, C.last); set(lastMv.t, 3, C.last); }
+      const vis = B.vis, hid = i => vis && !vis[i] && B.st.b[i] && B.st.b[i].s === 1 && B.st.b[i].t !== 'K';
+      if (vis) for (let i = 0; i < 36; i++) if (!vis[i]) set(i, 40, C.fog);
+      if (lastMv && (!vis || vis[lastMv.t])) { set(lastMv.f, 3, C.last); set(lastMv.t, 3, C.last); }
+      if (B.boss === 'hive' && B.hiveAt >= 0 && B.timer === 1) set(B.hiveAt, 3, C.hive);
       if (B.boss === 'tempest' && B.timer === 1) for (const i of edge(B.wind)) set(i, 3, C.wind);
       if (peek != null) for (const m of peekMoves) set(m.t, m.k ? 3 : 2, C.foe);
-      if (sel != null) { set(sel, 1, C.sel); for (const m of selMoves) set(m.t, m.k ? 3 : 2, m.k ? C.cap : m.d ? C.danger : C.move); }
+      if (sel != null) { set(sel, 1, C.sel); for (const m of selMoves) { const k = m.k && !hid(m.t); set(m.t, k ? 3 : 2, k ? C.cap : m.d ? C.danger : C.move); } }
       if (sel == null && phase === 'player' && hover >= 0 && hover < 36) { // threat preview
-        const st = B.st, h = st.b[hover];
+        const st = B.st, h = hid(hover) ? null : st.b[hover];
         if (h && h.s === 1) for (const m of R.moves(st, hover)) { const q = st.b[m.t]; if (q && q.s === 0) set(m.t, 3, C.cap); else if (!tileK[m.t]) set(m.t, 2, C.foe); }
-        else if (h && h.s === 0) for (let i = 0; i < 36; i++) { const q = st.b[i]; if (q && q.s === 1 && R.moves(st, i).some(m => m.k && m.t === hover)) set(i, 3, C.cap); }
+        else if (h && h.s === 0) for (let i = 0; i < 36; i++) { const q = st.b[i]; if (q && q.s === 1 && !hid(i) && R.moves(st, i).some(m => m.k && m.t === hover)) set(i, 3, C.cap); }
       }
       for (const m of B.marks) { // lava goes on top: erupting tiles override, warnings add an outer ring
         if (m.s === 2) set(m.i, 4, C.lava);
         else if (tileK[m.i] > 0 && tileK[m.i] < 10) tileK[m.i] += 10;
         else if (!tileK[m.i]) set(m.i, 3, C.lava);
+      }
+      for (const m of B.ice) { // ice: frozen tiles get a fill, coming frost a ring
+        if (m.s === 2 && (!tileK[m.i] || tileK[m.i] === 40)) set(m.i, 1, C.ice);
+        else if (tileK[m.i] > 0 && tileK[m.i] < 10) tileK[m.i] += 30;
+        else if (!tileK[m.i] || tileK[m.i] === 40) set(m.i, 3, C.ice);
       }
     } else if (shop && phase === 'shop') {
       for (const o of shop.offers) if (!o.sold) set(o.i, hover === o.i ? 1 : 3, run.gold >= o.price ? C.gold : C.no);
@@ -834,6 +877,11 @@
   function ambient(dt) {
     if (rand() < dt * 14) spark(rand(-6, 6), rand(-1, 3), rand(-6, 4), rand(-.1, .1), rand(.1, .4), 0, cur.glow, rand(.03, .06), rand(2, 4), { g: -.15, drag: 0 });
     if (!B) return;
+    if (B.boss === 'frost') {
+      if (rand() < dt * 30) spark(rand(-4, 4), rand(3, 5), rand(-4, 3), rand(-.3, .3), -rand(.4, .9), 0, [.9, .95, 1], rand(.03, .06), rand(4, 7), { g: 0, drag: 0 });
+      for (const m of B.ice) if (m.s === 2 && rand() < dt * 5) { const p = TP(m.i); spark(p[0] + rand(-.4, .4), .08, p[2] + rand(-.4, .4), 0, rand(.3, .8), 0, [.8, .97, 1], .05, .7, { g: 0 }); }
+    }
+    if (B.boss === 'hive' && rand() < dt * 20) spark(rand(-3, 3), rand(.3, 1.6), rand(-3, 3), rand(-1.5, 1.5), rand(-.5, .5), rand(-1.5, 1.5), [1, .8, .25], .035, rand(.5, 1), { g: 0, drag: 0 });
     for (const m of B.marks) if (rand() < dt * (m.s === 2 ? 14 : 4)) { const p = TP(m.i); spark(p[0] + rand(-.4, .4), .05, p[2] + rand(-.4, .4), 0, rand(.8, 2), 0, [1, rand(.4, .8), .1], .06, rand(.4, .9), { g: -1 }); }
     if (B.boss === 'tempest' && rand() < dt * (B.timer === 1 ? 50 : 14)) {
       const [dx, dy] = B.wind; spark(rand(-4, 4) - dx * 4, rand(.2, 1.8), rand(-4, 4) + dy * 4, dx * rand(4, 7), 0, -dy * rand(4, 7), [.8, 1, 1], .05, rand(.8, 1.6), { g: 0, drag: 0 });
@@ -847,6 +895,19 @@
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy, o = nx >= 0 && ny >= 0 && nx < 6 && ny < 6 && B.st.b[nx + ny * 6]; if (o && o.s !== B.st.b[i].s) return true; } return false; }
     return false;
   }
+  const ICE = [.75, .92, 1];
+  function bossFx(dt) {
+    for (const e of all) { e.fogT = 0; e.iceT = 0; }
+    if (B && B.boss === 'eclipse') { // you only see enemies within 2 tiles of your pieces (their king always shows)
+      const st = B.st, vis = B.vis || (B.vis = new Uint8Array(36)); vis.fill(0);
+      for (let i = 0; i < 36; i++) { const p = st.b[i]; if (!p || p.s) continue; const x = i % 6, y = (i / 6) | 0;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < 6 && ny < 6) vis[nx + ny * 6] = 1; } }
+      for (let i = 0; i < 36; i++) { const p = st.b[i]; if (p && p.s === 1 && p.t !== 'K' && !vis[i]) { const e = ents.get(p.id); if (e) e.fogT = 1; } }
+    }
+    if (B && B.st.fz) for (let i = 0; i < 36; i++) { const p = B.st.b[i]; if (p && B.st.fz[i] && p.t !== 'K') { const e = ents.get(p.id); if (e) e.iceT = 1; } }
+    for (const e of all) { e.fv = lerp(e.fv || 0, e.fogT, Math.min(1, dt * 6)); e.iv = lerp(e.iv || 0, e.iceT, Math.min(1, dt * 5)); }
+  }
+  const tint = (c, k) => k > .01 ? [lerp(c[0], ICE[0], k), lerp(c[1], ICE[1], k), lerp(c[2], ICE[2], k)] : c;
   function hsv(h, s, v) { const f = n => { const k = (n + h * 6) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); }; return [f(5), f(3), f(1)]; }
 
   function frame(ms) {
@@ -867,15 +928,15 @@
     let nsh = 0;
     for (const e of all) {
       e.upd(dt);
-      if (!e.rag && e.sca < .6 && nsh < 40 && Math.abs(e.p[0]) < 3.2) { shBuf[nsh * 4] = e.p[0]; shBuf[nsh * 4 + 1] = e.p[2]; shBuf[nsh * 4 + 2] = .42 * e.sc; shBuf[nsh * 4 + 3] = .6 * (1 - e.sca) * clamp(1 - (e.p[1] + e.lift) * .6, .2, 1); nsh++; }
+      if (!e.rag && Math.max(e.sca, e.fv || 0) < .6 && nsh < 40 && Math.abs(e.p[0]) < 3.2) { shBuf[nsh * 4] = e.p[0]; shBuf[nsh * 4 + 1] = e.p[2]; shBuf[nsh * 4 + 2] = .42 * e.sc; shBuf[nsh * 4 + 3] = .6 * (1 - e.sca) * clamp(1 - (e.p[1] + e.lift) * .6, .2, 1); nsh++; }
     }
     const np = updParticles(dt);
-    shopFx(dt); glows();
+    shopFx(dt); bossFx(dt); glows();
     envBones.fill(0);
     for (let b = 0; b < 8; b++) { const o = b * 16; envBones[o] = envBones[o + 5] = envBones[o + 10] = envBones[o + 15] = 1; envBones[o + 13] = b === 0 ? 0 : b < 5 ? Math.sin(time * 1.6 + b * 1.7) * .06 : Math.sin(time * .5 + b * 2.1) * .3; }
     gfx.begin({ sun: cur.sun, amb: cur.amb, glow: cur.glow, time, tile, tileK, sh: shBuf, nsh });
     gfx.draw('env', envBones, { A: cur.tA, B: cur.tB, mode: 1 });
-    for (const e of all) if (e.sca < .995) gfx.draw(e.m, e.bones, { A: e.A, B: e.B, flash: e.flash, scatter: e.sca });
+    for (const e of all) { const sc = Math.max(e.sca, e.fv || 0); if (sc < .995) gfx.draw(e.m, e.bones, { A: tint(e.A, (e.iv || 0) * .7), B: tint(e.B, (e.iv || 0) * .7), flash: e.flash, scatter: sc }); }
     gfx.particles(pdata, np);
     gfx.end({ skyA: cur.skyA, skyB: cur.skyB, time, flash: sflash, gray, fade: 1 });
     labels(); tip();

@@ -59,6 +59,7 @@
     chain: () => { for (let i = 0; i < 6; i++) { noise(.025, .22, 5200 + Math.random() * 2000, i * .03); tone(1300 + Math.random() * 600, .025, 'square', .05, 1, i * .03); } },
     gallop: () => { tone(880, .035, 'triangle', .3, .6); tone(720, .035, 'triangle', .3, .6, .09); },
     fizz: () => noise(.25, .18, 7000, 0, .6),
+    freeze: () => { arp([1568, 2093, 2637, 3136], .04, 'triangle', .08, .3); noise(.5, .25, 8000, 0, .3); },
     drum: d => { const n = Math.floor(d / .05); for (let i = 0; i < n; i++) noise(.04, .1 + .25 * i / n, 1800, i * .05, .5); tone(110, d, 'triangle', .12, 1.5); },
     step(m) { (STEP[m] || G.sfx.move)(); },
   };
