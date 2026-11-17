@@ -71,7 +71,7 @@
       this.m = m; this.p = [p[0], p[1] || 0, p[2]]; this.pp = [p[0], p[2]]; this.yaw = 0; this.sc = 1; this.A = PA; this.B = PB;
       this.sq = 1; this.sqv = 0; this.lean = [0, 0]; this.lv = [0, 0]; this.sca = 0; this.flash = 0; this.rag = null;
       this.spin = 0; this.lift = 0; this.bob = 0; this.wob = 0; this.ph = rand(9); this.side = -1; this.dead = false; this.king = false;
-      this.slT = 0; this.it = rand(2, 7); this.act = null; this.at = 0; this.yo = 0; this.hy = 0; this.lost = null; this.hurt = 0; this.sl = 0;
+      this.it = rand(2, 7); this.act = null; this.at = 0; this.yo = 0; this.hy = 0; this.lost = null; this.hurt = 0;
       this.bones = new Float32Array(128);
     }
     upd(dt) {
@@ -83,7 +83,6 @@
         this.lean[0] += this.lv[0] * dt; this.lean[1] += this.lv[1] * dt;
         this.sqv += ((1 - this.sq) * 280 - this.sqv * 11) * dt; this.sq = clamp(this.sq + this.sqv * dt, .45, 1.7);
         this.flash = Math.max(0, this.flash - dt * 5); this.yaw += this.spin * dt;
-        this.sl += (this.slT - this.sl) * Math.min(1, dt * 16);
         this.idle(dt, Math.hypot(vx, vz));
       }
       if (this.rag) { // ripped apart: every bone is its own rigid body
@@ -105,7 +104,7 @@
       const jig = this.m === 'slime' ? Math.sin(t * 5.5) * .05 + Math.sin(t * 9.1) * .02 : Math.sin(t * 2.2) * .014;
       const sq = this.sq * (1 + jig), sxz = 1 / Math.sqrt(sq);
       const Ry = ry(this.yaw + this.yo + this.wob * Math.sin(t * 10) * .14);
-      const y = p[1] + this.lift + this.sl + this.hy + (this.m === 'ghost' ? .1 + Math.sin(t * 2.5) * .05 : 0) + this.bob * Math.sin(t * 2);
+      const y = p[1] + this.lift + this.hy + (this.m === 'ghost' ? .1 + Math.sin(t * 2.5) * .05 : 0) + this.bob * Math.sin(t * 2);
       for (let b = 0; b < md.nb; b++) {
         if (this.lost && this.lost.includes(b)) { setBone(this.bones, b * 16, Ry, 0, 0, 0, p[0], -9, p[2]); continue; }
         const w = Math.min(1.5, md.cent[b][1] * 1.5);
@@ -260,12 +259,13 @@
       const [x, y] = gfx.project([o.ped.p[0], 0, o.ped.p[2] + .62]);
       el.style.display = 'block'; el.style.left = x + 'px'; el.style.top = y + 'px';
       el.className = 'price' + (run.gold < o.price ? ' no' : ''); el.innerHTML = '<i class="coin"></i>' + o.price;
+      el.style.transform = `translate(-50%, -50%) translate(${Math.sin(time * 55) * 9 * o.sh}px, ${-Math.sin(o.lb * Math.PI) * 12}px) scale(${1 + o.lb * .25})`;
     });
   }
 
   // ------------------------------------------------------------ run / army
   function clearAll() {
-    all.clear(); ents.clear(); gho = null; shelf.length = 0; shop = null; choice = null; B = null; sel = peek = lastMv = null; selMoves = []; PT.length = 0; tweens.length = 0; gray = 0; tscale = 1;
+    all.clear(); ents.clear(); rainbowT = 0; shelf.length = 0; shop = null; choice = null; B = null; sel = peek = lastMv = null; selMoves = []; PT.length = 0; tweens.length = 0; gray = 0; tscale = 1;
   }
   function addUnit(t, slot) { const u = { t, slot, id: uid++ }; run.army.push(u); seen(t); return u; }
   function unitEnt(u, pop) {
@@ -283,39 +283,71 @@
     theme = TH['a' + Math.min(2, (run.round / 3) | 0)];
     phase = 'title'; hud(); splash('CHESSLITE', 'show', '&#9654;');
   }
+  let leverGo = null, rainbowT = 0;
+  function fountain(p, n, dur) { // coins spraying up out of a point for a while
+    for (let k = 0; k < n; k++) wait(rand(dur)).then(() => spark(p[0] + rand(-.2, .2), .6, p[2] + rand(-.2, .2), rand(-2, 2), rand(6, 10), rand(-2, 2), [1, rand(.7, .9), .25], rand(.07, .11), rand(.9, 1.4), { g: 14 }));
+  }
+  function confetti(n) {
+    for (let k = 0; k < n; k++) spark(rand(-3.5, 3.5), rand(3.5, 5.5), rand(-3, 2), rand(-1, 1), rand(-1, 1), rand(-1, 1), hsv(rand(), .75, 1), rand(.06, .1), rand(2, 3.5), { g: 1.2, drag: 1.5 });
+  }
   async function spin() {
     phase = 'anim'; run.spun = true; hud();
-    const z = TP(20)[2], res = REELS.map(pick);
+    const z = TP(20)[2], res = Q.get('reels') ? Q.get('reels').split('').slice(0, 3) : REELS.map(pick); // ?reels=FFF forces a result (testing)
+    const tease = res[0] === res[1] || rand() < .25; // last reel drags it out (sometimes for nothing)
     const reels = res.map((t, k) => {
       const p = [(k - 1) * 1.3, 0, z], ped = mkEnt('ped', p, {}), item = mkEnt(MODEL[pick(REELS[k])], p, { lift: .5, sc: .85, bob: .05, yaw: Math.PI });
-      ped.sca = item.sca = 1; wait(k * .08).then(() => { sfx.pop(); appear(ped); appear(item); });
-      return { t, p, ped, item, next: 0, stop: 1.1 + k * .7, done: false };
+      raise(ped, item, k * .1, -1);
+      const slow = k === 2 && tease ? 2.1 : .9;
+      return { k, t, p, ped, item, next: 0, stop: 1.1 + k * .7 + (k === 2 && tease ? 1.3 : 0), slow, done: false };
     });
-    await wait(.45);
+    // the lever: wobbles until clicked, then gets yanked and springs back
+    const lev = mkEnt('lever', [2.7, 0, z], { yaw: -.45, sc: 1.45 }); appear(lev); dust(lev.p);
+    await wait(.85);
+    phase = 'lever'; lev.wob = 1;
+    const glow = setInterval(() => { lev.flash = .5; }, 600);
+    await new Promise(r => leverGo = r); leverGo = null; clearInterval(glow);
+    phase = 'anim'; lev.wob = 0; sfx.click();
+    await tw(.2, k => { lev.lean[1] = k * k * 1.1; lev.lv[1] = 0; });
+    sfx.thud(); sfx.chain(); shake = .3; punch = .8; dust([lev.p[0], 0, lev.p[2] + .3], 8);
+    for (const r of reels) { r.item.spin = 24; r.item.flash = .8; }
+    let drum = false;
     for (let tt = 0; reels.some(r => !r.done); tt += .02) {
       for (const r of reels) {
-        if (r.done || tt < r.next) continue;
-        if (tt >= r.stop) { // reel locks in
-          r.done = true; r.item.m = MODEL[r.t]; r.item.flash = 1; r.item.sqv -= 9; sfx.land(); sfx.buy();
-          burst([r.p[0], .7, r.p[2]], [1, .8, .3], 22, 4); shake = Math.max(shake, .25); punch = .6;
+        if (r.done) continue;
+        const ip = r.item.p; // motion blur: streaks shooting down past the spinning piece
+        for (let q = 0; q < 2; q++) spark(ip[0] + rand(-.22, .22), rand(.6, 1.4), ip[2] + rand(-.1, .1), 0, -rand(5, 9), 0, rand() < .5 ? PA : PB, .04, .1, { g: 0, drag: 0 });
+        if (tt < r.next) continue;
+        if (tt >= r.stop) { // reel locks in: thump, light column, camera punch
+          r.done = true; r.item.m = MODEL[r.t]; r.item.flash = 1; r.item.sqv -= 10; r.item.spin = 0;
+          const y0 = r.item.yaw % 6.2832; tw(.25, q => r.item.yaw = lerp(y0, Math.PI * 2 + Math.PI, q));
+          sfx.stomp(); sfx.buy(); shake = Math.max(shake, .35); punch = 1.3;
+          for (let q = 0; q < 40; q++) spark(r.p[0] + rand(-.22, .22), rand(.4, 1), r.p[2] + rand(-.22, .22), 0, rand(4, 11), 0, [1, .92, .55], rand(.05, .09), rand(.3, .6), { g: 0, drag: 1.5 });
+          burst([r.p[0], .7, r.p[2]], [1, .8, .3], 22, 4);
+          if (tease && r.k === 1 && !drum) { drum = true; sfx.drum(1.3); }
           continue;
         }
-        let m; do m = MODEL[pick(REELS[reels.indexOf(r)])]; while (m === r.item.m && REELS[reels.indexOf(r)].length > 1 && rand() < .9);
-        r.item.m = m; r.item.sqv += 4; sfx.tick();
-        r.next = tt + lerp(.05, .24, clamp((tt - (r.stop - .9)) / .9, 0, 1)); // slow down before stopping
+        let m; do m = MODEL[pick(REELS[r.k])]; while (m === r.item.m && REELS[r.k].length > 1 && rand() < .9);
+        const prog = clamp((tt - (r.stop - r.slow)) / r.slow, 0, 1);
+        r.item.m = m; r.item.sqv += 4; sfx.tick(1 + prog * .9);
+        r.item.spin = lerp(24, 5, prog);
+        if (r.k === 2 && tease && prog > 0) { r.item.flash = .6; punch = Math.max(punch, prog * .5); }
+        r.next = tt + lerp(.05, r.k === 2 && tease ? .4 : .24, prog); // slow down before stopping
       }
       await wait(.02);
     }
+    vanish(lev);
     const same = Math.max(...res.map(t => res.filter(q => q === t).length));
     await wait(.35);
-    if (same === 3) { splash('JACKPOT', 'flash'); sfx.win(); shake = .5; coins([0, 0, z], 5); await wait(.9); }
-    else if (same === 2) { coins([0, 0, z], 2); await wait(.4); }
+    if (same === 3) {
+      splash('JACKPOT', 'flash'); sfx.win(); shake = .6; punch = 2; rainbowT = 2.6; coins([0, 0, z], 5);
+      fountain([0, 0, z], 90, 1.6); confetti(160); wait(.5).then(() => confetti(120)); await wait(1.6);
+    } else if (same === 2) { rainbowT = .9; coins([0, 0, z], 2); fountain([0, 0, z], 25, .6); confetti(40); await wait(.6); }
     reels.forEach((r, k) => {
       const slot = freeSlot(r.t); if (slot < 0) { vanish(r.item); vanish(r.ped); return; }
       const u = addUnit(r.t, slot), e = r.item; ents.set(u.id, e);
       Object.assign(e, { bob: 0, side: 0 });
       wait(k * .12).then(() => {
-        vanish(r.ped); tw(.4, q => { e.lift = .5 * (1 - q); e.sc = lerp(.85, 1, q); });
+        sink(r.ped); tw(.4, q => { e.lift = .5 * (1 - q); e.sc = lerp(.85, 1, q); });
         return hop(e, TP(slot), .45, 1.1).then(() => land(e, slot));
       });
     });
@@ -492,10 +524,10 @@
       const c = R.clone(st); R.apply(c, m, null); m.d = false;
       if (c.w < 0 && c.turn === 1) { const j = c.b.findIndex(p => p && p.id === id); if (j >= 0) m.d = R.all(c, 1).some(x => x.t === j && x.k > 0); }
     }
-    const e = ents.get(id); if (e) { e.sqv += 5; e.wob = 1; e.slT = .16; }
+    const e = ents.get(id); if (e) { e.sqv += 5; e.wob = 1; }
     sfx.sel();
   }
-  function deselect() { if (sel != null && B) { const p = B.st.b[sel], e = p && ents.get(p.id); if (e) { e.wob = 0; e.slT = 0; } } sel = null; selMoves = []; }
+  function deselect() { if (sel != null && B) { const p = B.st.b[sel], e = p && ents.get(p.id); if (e) e.wob = 0; } sel = null; selMoves = []; }
 
   async function playerMove(m) {
     const st = B.st, ev = []; deselect(); peek = null; lastMv = null; phase = 'anim';
@@ -606,35 +638,73 @@
     shop = { offers: [], reroll: run.relics.includes('clover') ? 0 : 1 }; roll();
     await wait(.5); phase = 'shop'; hud();
   }
+  // --- pedestal juice: pedestals rise out of the board, items drop onto them; leaving, items get sucked down
+  function dust(p, n = 10) { for (let k = 0; k < n; k++) { const a = k / n * 6.28 + rand(.3); spark(p[0] + Math.cos(a) * .3, .06, p[2] + Math.sin(a) * .3, Math.cos(a) * 1.8, rand(.3, .9), Math.sin(a) * 1.8, [.82, .78, .72], rand(.05, .08), rand(.35, .55), { g: 2, drag: 3 }); } }
+  function raise(ped, item, d, i) {
+    ped.p[1] = -.85; ped.sca = 0; item.sca = 1; item.p[1] = 3;
+    return wait(d).then(() => { sfx.pop(); return tw(.3, q => { const b = 1 - Math.pow(1 - q, 3); ped.p[1] = -.85 * (1 - b) + Math.sin(q * 3.14) * .1; }); })
+      .then(() => { ped.p[1] = 0; dust(ped.p); if (i >= 0) tv[i] -= 1.5; sfx.land(); appear(item, .12); return tw(.26, q => item.p[1] = 3 * (1 - q * q)); })
+      .then(() => { item.p[1] = 0; item.sqv -= 9; item.flash = .6; burst([ped.p[0], .55, ped.p[2]], [1, .9, .6], 8, 2); });
+  }
+  const sink = ped => { dust(ped.p, 6); return tw(.3, q => ped.p[1] = -.9 * q * q).then(() => all.delete(ped)); };
+  const suck = item => tw(.22, q => { item.lift = .5 * (1 - q); item.sc = .85 * (1 - q * q); item.spin = 1.2 + 14 * q; }).then(() => all.delete(item));
+  function poor() { const g = $('#gold'); g.classList.remove('poor'); void g.offsetWidth; g.classList.add('poor'); }
+  function coinFly(n, to, done) { // coins arc from the gold counter to a world point
+    const g = $('#gold i').getBoundingClientRect(), sx = g.left, sy = g.top, [tx, ty] = gfx.project(to);
+    for (let k = 0; k < n; k++) {
+      const c = document.createElement('i'); c.className = 'coin fly'; c.style.left = sx + 'px'; c.style.top = sy + 'px'; $('#hud').appendChild(c);
+      const mx = (tx - sx) / 2 + rand(-40, 40), my = (ty - sy) / 2 - rand(60, 120);
+      c.animate([{ transform: 'translate(0,0) scale(1.3)' }, { transform: `translate(${mx}px,${my}px) scale(1.7)` }, { transform: `translate(${tx - sx}px,${ty - sy}px) scale(.7)` }],
+        { duration: 380, delay: k * 40, easing: 'ease-in', fill: 'backwards' }).onfinish = () => { c.remove(); sfx.coin(); spark(to[0], .6, to[2], rand(-1, 1), rand(1, 2.5), rand(-1, 1), [1, .8, .3], .07, .4); if (k === n - 1 && done) done(); };
+    }
+  }
+  function shopFx(dt) { // hover: item rises, spins faster, label hops
+    if (!shop) return;
+    for (const o of shop.offers) {
+      o.lb = Math.max(0, (o.lb || 0) - dt * 3.5); o.sh = Math.max(0, (o.sh || 0) - dt * 2.5);
+      if (o.sold || o.busy) continue;
+      const h = phase === 'shop' && hover === o.i ? 1 : 0;
+      if (h && !o.hov) { o.lb = 1; o.item.sqv += 5; sfx.tick(1.4); }
+      o.hov = h; o.h = lerp(o.h || 0, h, Math.min(1, dt * 10));
+      o.item.lift = .5 + .2 * o.h; o.item.spin = 1.2 + 4.5 * o.h;
+      if (o.rel && o.price >= 10 && rand() < dt * 45) { const p = o.ped.p; spark(p[0] + rand(-.16, .16), rand(.7, 3.6), p[2] + rand(-.16, .16), 0, -rand(.2, .6), 0, [1, .92, .65], rand(.03, .06), rand(.3, .7), { g: 0, drag: 0 }); } // rare relic: light beam
+    }
+  }
   function roll() {
-    for (const o of shop.offers) if (!o.sold) { vanish(o.ped); vanish(o.item); }
     const act = Math.min(2, ((run.round + 1) / 3) | 0);
     const pool = [['P', 'P', 'N', 'B', 'F', 'S', 'M'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H'], ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O']][act];
     const rel = Object.keys(RELICS).filter(k => !run.relics.includes(k)).sort(() => rand() - .5);
     const offs = [{ t: pick(pool) }, { t: pick(pool) }, rel.length > 1 && rand() < .5 ? { rel: rel[1] } : { t: pick(['F', 'X', 'G', 'C', 'H', 'M', 'S', 'O']) }, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
     shop.offers = offs.map((o, k) => {
       const i = 19 + k, p = TP(i), ped = mkEnt('ped', p, {}), item = mkEnt(o.rel || MODEL[o.t], p, { lift: .5, spin: 1.2, sc: .85, bob: .05 });
-      wait(k * .07).then(() => { sfx.pop(); tv[i] -= 1.5; }); ped.sca = item.sca = 1; wait(k * .07).then(() => { appear(ped); appear(item); });
+      raise(ped, item, k * .09, i);
       if (o.rel) seenRel(o.rel); else seen(o.t);
       return { ...o, i, ped, item, price: o.rel ? RELICS[o.rel][0] : PRICE[o.t], sold: false };
     });
   }
-  function nope(o) { sfx.err(); o.item.wob = 1; o.item.sqv += 6; setTimeout(() => o.item.wob = 0, 350); }
+  function nope(o, broke) { sfx.err(); o.item.wob = 1; o.item.sqv += 6; o.sh = 1; if (broke) poor(); setTimeout(() => o.item.wob = 0, 350); }
   function buy(o) {
-    if (o.sold) return;
+    if (o.sold || o.busy) return;
     const e = o.item;
-    if (run.gold < o.price) return nope(o);
-    if (o.t) {
-      const slot = freeSlot(o.t); if (slot < 0) return nope(o);
-      const u = addUnit(o.t, slot); ents.set(u.id, e);
-      Object.assign(e, { spin: 0, bob: 0, side: 0 }); tw(.4, k => { e.lift = .5 * (1 - k); e.sc = lerp(.85, 1, k); e.yaw = lerp(e.yaw % 6.2832, Math.PI, k); });
-      hop(e, TP(slot), .45, 1.1).then(() => land(e, slot));
-    } else {
-      all.delete(e); const s = addRelic(o.rel); s.sca = 0; const to = s.p.slice(); s.p[0] = e.p[0]; s.p[1] = .5; s.p[2] = e.p[2];
-      tw(.5, k => { const q = k * k * (3 - 2 * k); s.p[0] = lerp(e.p[0], to[0], q); s.p[2] = lerp(e.p[2], to[2], q); s.p[1] = lerp(.5, to[1], q) + Math.sin(k * 3.14) * 1.2; });
-    }
-    run.gold -= o.price; o.sold = true; vanish(o.ped); sfx.buy(); hud();
-    burst([o.ped.p[0], .6, o.ped.p[2]], [1, .8, .3], 18, 4);
+    if (run.gold < o.price) return nope(o, true);
+    const slot = o.t ? freeSlot(o.t) : -1; if (o.t && slot < 0) return nope(o);
+    run.gold -= o.price; o.sold = true; hud(); sfx.click();
+    const g = $('#gold'); g.classList.add('bump'); setTimeout(() => g.classList.remove('bump'), 90);
+    const u = o.t ? addUnit(o.t, slot) : null; if (u) ents.set(u.id, e); // claim now, animate after the coins land
+    coinFly(Math.min(8, o.price), [o.ped.p[0], .5, o.ped.p[2]], () => {
+      sfx.buy(); burst([o.ped.p[0], .6, o.ped.p[2]], [1, .8, .3], 22, 4.5); sink(o.ped); tv[o.i] -= 2;
+      e.flash = 1; e.spin = 18; // victory spin
+      tw(.32, k => e.lift = .5 + Math.sin(k * 3.14) * .55).then(() => {
+        e.spin = 0;
+        if (o.t) {
+          Object.assign(e, { bob: 0, side: 0 }); tw(.4, k => { e.lift = .5 * (1 - k); e.sc = lerp(.85, 1, k); e.yaw = lerp(e.yaw % 6.2832, Math.PI, k); });
+          hop(e, TP(slot), .45, 1.1).then(() => land(e, slot));
+        } else {
+          all.delete(e); const s = addRelic(o.rel); s.sca = 0; const to = s.p.slice(); s.p[0] = e.p[0]; s.p[1] = .5; s.p[2] = e.p[2];
+          tw(.5, k => { const q = k * k * (3 - 2 * k); s.p[0] = lerp(e.p[0], to[0], q); s.p[2] = lerp(e.p[2], to[2], q); s.p[1] = lerp(.5, to[1], q) + Math.sin(k * 3.14) * 1.2; }).then(() => { s.sqv -= 8; s.flash = 1; sfx.land(); });
+        }
+      });
+    });
   }
   function shopClick(i) {
     const o = shop.offers.find(o => o.i === i && !o.sold); if (o) { deselect(); return buy(o); }
@@ -650,14 +720,20 @@
   function go() {
     if (phase !== 'shop') return;
     if (sel != null) { const u = run.army.find(u => u.slot === sel); if (u) ents.get(u.id).wob = 0; sel = null; }
-    for (const o of shop.offers) if (!o.sold) { vanish(o.ped); vanish(o.item); }
+    for (const o of shop.offers) if (!o.sold) { o.busy = true; suck(o.item); wait(.15).then(() => sink(o.ped)); }
     shop = null; run.round++; sfx.click(); nextFight(); hud();
   }
   $('#go').onclick = go;
-  $('#reroll').onclick = () => {
+  $('#reroll').onclick = async () => {
     if (phase !== 'shop') return;
-    if (run.gold < shop.reroll) return sfx.err();
-    run.gold -= shop.reroll; shop.reroll++; sfx.click(); roll(); hud();
+    const btn = $('#reroll'); btn.classList.remove('wob'); void btn.offsetWidth; btn.classList.add('wob');
+    if (run.gold < shop.reroll) { poor(); return sfx.err(); }
+    run.gold -= shop.reroll; shop.reroll++; sfx.click(); hud(); phase = 'anim';
+    const sp = $('#reroll span'); sp.classList.remove('tick'); void sp.offsetWidth; sp.classList.add('tick');
+    const old = shop.offers.filter(o => !o.sold); old.forEach(o => o.busy = true);
+    sfx.whoosh(); await Promise.all(old.map(o => suck(o.item)));
+    await Promise.all(shop.offers.map(o => o.sold ? 0 : sink(o.ped)));
+    roll(); await wait(.55); phase = 'shop';
   };
 
   // ------------------------------------------------------------ input
@@ -703,6 +779,7 @@
   cv.addEventListener('pointerdown', e => {
     sfx.init(); setMouse(e);
     if (phase === 'title') { splash(null); sfx.click(); return run.spun ? nextFight() : spin(); }
+    if (phase === 'lever') return leverGo && leverGo();
     if (phase === 'over') { sfx.click(); return newRun(); }
     downTile = hover; click(hover);
   });
@@ -726,14 +803,6 @@
   }
 
   // ------------------------------------------------------------ frame
-  let gho = null;
-  function ghostUpd() { // translucent copy of the selected piece where it would land
-    const mv = phase === 'player' && sel != null && hover >= 0 && hover < 36 && selMoves.find(m => m.t === hover && m.k <= 1);
-    const p = mv && B.st.b[sel], src = p && ents.get(p.id);
-    if (!src) { if (gho) gho.sca = 1; return; }
-    if (!gho || gho.m !== src.m || !all.has(gho)) { if (gho) all.delete(gho); gho = mkEnt(src.m, TP(hover), { yaw: Math.PI, A: PA, B: PB }); }
-    const t = TP(hover); gho.p[0] = t[0]; gho.p[2] = t[2]; gho.sca = .12; gho.flash = .5; gho.lift = Math.sin(time * 4) * .03 + .04;
-  }
   function glows() {
     tileK.fill(0);
     const set = (i, k, c) => { if (i < 0) return; tileK[i] = k; tile[i * 4] = c[0]; tile[i * 4 + 1] = c[1]; tile[i * 4 + 2] = c[2]; };
@@ -753,11 +822,12 @@
         else if (!tileK[m.i]) set(m.i, 3, C.lava);
       }
     } else if (shop && phase === 'shop') {
-      for (const o of shop.offers) if (!o.sold) set(o.i, 3, run.gold >= o.price ? C.gold : C.no);
+      for (const o of shop.offers) if (!o.sold) set(o.i, hover === o.i ? 1 : 3, run.gold >= o.price ? C.gold : C.no);
       if (sel != null) { for (let i = 0; i < 12; i++) set(i, 2, C.move); set(sel, 1, C.sel); }
     }
     for (let i = 0; i < 36; i++) if (blastT[i] > 0) set(i, 20 + Math.min(1, blastT[i]), C.cap);
     if (choice && choice.prev >= 0) for (const f of choice.opts[choice.prev].foes) set(f.i, 1, C.foe);
+    if (rainbowT > 0) for (let i = 0; i < 36; i++) if (!tileK[i]) set(i, rainbowT > .4 || (i + ((time * 10) | 0)) % 2 ? 1 : 0, hsv((((i % 6) + ((i / 6) | 0)) * .09 - time * .9) % 1 + 1, .7, 1));
     if (hover >= 0 && hover < 36 && !tileK[hover] && (phase === 'player' || phase === 'shop')) set(hover, 1, C.hover);
     for (let i = 0; i < 36; i++) tile[i * 4 + 3] = ty[i];
   }
@@ -793,13 +863,14 @@
     for (let i = 0; i < 36; i++) { tv[i] += (-ty[i] * 320 - tv[i] * 13) * dt; ty[i] = clamp(ty[i] + tv[i] * dt, -.25, .2); }
     ambient(dt);
     for (let i = 0; i < 36; i++) blastT[i] = Math.max(0, blastT[i] - rdt * 1.4);
+    rainbowT = Math.max(0, rainbowT - rdt);
     let nsh = 0;
     for (const e of all) {
       e.upd(dt);
       if (!e.rag && e.sca < .6 && nsh < 40 && Math.abs(e.p[0]) < 3.2) { shBuf[nsh * 4] = e.p[0]; shBuf[nsh * 4 + 1] = e.p[2]; shBuf[nsh * 4 + 2] = .42 * e.sc; shBuf[nsh * 4 + 3] = .6 * (1 - e.sca) * clamp(1 - (e.p[1] + e.lift) * .6, .2, 1); nsh++; }
     }
     const np = updParticles(dt);
-    ghostUpd(); glows();
+    shopFx(dt); glows();
     envBones.fill(0);
     for (let b = 0; b < 8; b++) { const o = b * 16; envBones[o] = envBones[o + 5] = envBones[o + 10] = envBones[o + 15] = 1; envBones[o + 13] = b === 0 ? 0 : b < 5 ? Math.sin(time * 1.6 + b * 1.7) * .06 : Math.sin(time * .5 + b * 2.1) * .3; }
     gfx.begin({ sun: cur.sun, amb: cur.amb, glow: cur.glow, time, tile, tileK, sh: shBuf, nsh });
@@ -814,6 +885,7 @@
       else if (phase === 'player') { const m = R.best(B.st, 2); if (m) playerMove(m); }
       else if (phase === 'shop') { const o = shop.offers.find(o => !o.sold && run.gold >= o.price && (o.rel || freeSlot(o.t) >= 0)); if (o) buy(o); else go(); }
       else if (phase === 'choose') choose(pick(choice.opts));
+      else if (phase === 'lever') leverGo && leverGo();
       else if (phase === 'over') newRun();
     }
   }

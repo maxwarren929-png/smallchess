@@ -14,6 +14,13 @@
   .coin { display: inline-block; width: .7em; height: .7em; background: #ffc83d; box-shadow: inset -.14em -.14em 0 #c9781f, 0 0 0 .14em #120c1c; margin-right: .35em; vertical-align: baseline; }
   #gold { position: absolute; left: 24px; top: 18px; font-size: 34px; font-weight: 700; transition: transform .12s; transform-origin: left center; }
   #gold.bump { transform: scale(1.35); color: #ffe27a; transition: none; }
+  #gold.poor { animation: poor .45s; }
+  @keyframes poor { 0%, 100% { color: #fff3d6; } 15%, 55% { color: #ff5a4a; transform: translateX(-6px); } 35%, 75% { color: #ff5a4a; transform: translateX(6px); } }
+  .coin.fly { position: absolute; width: 18px; height: 18px; margin: 0; pointer-events: none; z-index: 5; }
+  #reroll.wob { animation: wob .35s; }
+  @keyframes wob { 25% { transform: rotate(-8deg) scale(1.08); } 60% { transform: rotate(6deg); } }
+  #reroll span.tick { display: inline-block; animation: tick .4s cubic-bezier(.2, 2.2, .4, 1); }
+  @keyframes tick { from { transform: scale(2) translateY(-6px); color: #ffe27a; } }
   #track { position: absolute; left: 50%; top: 24px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; }
   #track i { width: 12px; height: 12px; background: #2a2338; box-shadow: 0 0 0 3px #120c1c; }
   #track i.boss { width: 16px; height: 16px; transform: rotate(45deg); margin: 0 5px; background: #4a2030; }
