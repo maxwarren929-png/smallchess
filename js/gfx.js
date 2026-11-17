@@ -30,10 +30,13 @@ void main(){
     if(ti>=0){
       vec4 t=uTile[ti]; p.y+=t.a; float k=uTileK[ti];
       if(k>0.){
-        vec2 c=vec2(float(ti%6)-2.5, 2.5-float(ti/6)); vec2 d=abs(p.xz-c); float r=length(p.xz-c), m;
-        if(k<1.5) m=.5; else if(k<2.5) m=step(r,.17); else if(k<3.5) m=step(.33,max(d.x,d.y)); else m=.9;
-        m*=step(.5,aNrm.y)*(.82+.18*sin(uT*6.+float(ti)));
-        col=mix(col,t.rgb,m); emis=max(emis,m*.85);
+        vec2 c=vec2(float(ti%6)-2.5, 2.5-float(ti/6)); vec2 d=abs(p.xz-c); float r=length(p.xz-c), m, e=max(d.x,d.y);
+        bool lava=k>9.5 && k<19.5; if(lava) k-=10.; // +10 = burning-tile ring drawn outside whatever else is on the tile
+        if(k>19.5) m=(k-20.)*.9; // 20..21 = fading full fill (blast flash)
+        else if(k<.5) m=0.; else if(k<1.5) m=.5; else if(k<2.5) m=step(r,.17); else if(k<3.5) m=step(.33,e)*(lava?step(e,.4):1.); else m=.9;
+        float top=step(.5,aNrm.y), pl=.82+.18*sin(uT*6.+float(ti));
+        m*=top*pl; col=mix(col,t.rgb,m); emis=max(emis,m*.85);
+        if(lava){ float l=step(.41,e)*top*pl; col=mix(col,vec3(1.,.5,.1),l); emis=max(emis,l*.85); }
       }
     }
     if(aNrm.y>.3 && p.y>-.5){

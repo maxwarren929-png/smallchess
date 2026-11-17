@@ -11,7 +11,9 @@
   const TP = i => [(i % 6) - 2.5, 0, 2.5 - ((i / 6) | 0)]; // tile -> world
 
   const MODEL = { P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen', K: 'king', F: 'frog', X: 'bomb', G: 'ghost', C: 'cannon' };
-  const PRICE = { P: 2, N: 5, B: 5, R: 8, Q: 14, F: 5, X: 6, G: 8, C: 8 };
+  const PRICE = { P: 2, N: 5, B: 5, R: 8, Q: 14, F: 5, X: 6, G: 6, C: 8 };
+  // starting slot machine: reel 0 always lands a unique piece, the others are mostly pawns
+  const REELS = [['F', 'X', 'G', 'C'], ['P', 'P', 'P', 'N', 'B', 'F', 'X'], ['P', 'P', 'P', 'N', 'B', 'G', 'C']];
   const NAMES = { P: ['PAWN'], N: ['KNIGHT'], B: ['BISHOP'], R: ['ROOK'], Q: ['QUEEN'], F: ['FROG', 'leaps 2'], X: ['BOMB', 'explodes'], G: ['GHOST', 'phases'], C: ['CANNON', 'shoots 3'] };
   const RELICS = {
     shield: [9, 'AEGIS', 'blocks 1 capture'], frenzy: [12, 'FURY', 'capture = go again'], crown: [8, 'CROWN', 'king strides 2'], wings: [6, 'WINGS', 'pawns sidestep'],
@@ -34,7 +36,7 @@
   let phase = 'title', run, B = null, shop = null, sel = null, selMoves = [], peek = null, peekMoves = [], hover = -1, lastMv = null, uid = 1;
   let time = 0, tscale = 1, tsReal = 0, shake = 0, punch = 0, sflash = 0, gray = 0, last = 0, demoT = 1;
   const ents = new Map(), all = new Set(), shelf = [], MD = {};
-  const tile = new Float32Array(144), tileK = new Float32Array(36), ty = new Float32Array(36), tv = new Float32Array(36), shBuf = new Float32Array(160);
+  const blastT = new Float32Array(36), tile = new Float32Array(144), tileK = new Float32Array(36), ty = new Float32Array(36), tv = new Float32Array(36), shBuf = new Float32Array(160);
   const envBones = new Float32Array(128), mouse = { x: 0, y: 0, nx: 0, ny: 0 };
   const cur = JSON.parse(JSON.stringify(TH.a0)); let theme = TH.a0;
 
@@ -168,6 +170,8 @@
     if (v.side === 1 && B) coins(v.p, 1 + (run.relics.includes('purse') ? 1 : 0));
   }
   function boomFx(p) {
+    const cx = Math.round(p[0] + 2.5), cy = Math.round(2.5 - p[2]); // blast area flashes red
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < 6 && y < 6) blastT[x + y * 6] = 1.6; }
     burst([p[0], .3, p[2]], [1, .55, .15], 60, 8); burst([p[0], .3, p[2]], [1, .9, .4], 40, 5); burst([p[0], .3, p[2]], [.25, .2, .25], 30, 6, { g: 3 });
     shake = Math.max(shake, .7); sflash = .5; punch = 1.5; sfx.boom();
     for (let i = 0; i < 36; i++) { const q = TP(i), d = Math.hypot(q[0] - p[0], q[2] - p[2]); if (d < 2.2) tv[i] -= 3 / (1 + d); }
@@ -222,11 +226,52 @@
   function newRun() {
     clearAll();
     run = { gold: +(Q.get('g') || 3), round: +(Q.get('r') || 0), relics: [], army: [] };
-    [['K', 2], ['N', 3], ['P', 7], ['P', 8], ['P', 9]].forEach(([t, s]) => unitEnt(addUnit(t, s), true));
+    unitEnt(addUnit('K', 2), true);
+    run.spun = Q.has('start');
+    (Q.get('start') || '').split('').filter(t => PRICE[t]).forEach(t => { const s = freeSlot(t); if (s >= 0) unitEnt(addUnit(t, s), true); });
     (Q.get('relics') || '').split(',').filter(k => RELICS[k]).forEach(addRelic);
     (Q.get('army') || '').split('').filter(t => PRICE[t]).forEach(t => { const s = freeSlot(t); if (s >= 0) unitEnt(addUnit(t, s), true); });
     theme = TH['a' + Math.min(2, (run.round / 3) | 0)];
     phase = 'title'; hud(); splash('CHESSLITE', 'show', '&#9654;');
+  }
+  async function spin() {
+    phase = 'anim'; run.spun = true; hud();
+    const z = TP(20)[2], res = REELS.map(pick);
+    const reels = res.map((t, k) => {
+      const p = [(k - 1) * 1.3, 0, z], ped = mkEnt('ped', p, {}), item = mkEnt(MODEL[pick(REELS[k])], p, { lift: .5, sc: .85, bob: .05, yaw: Math.PI });
+      ped.sca = item.sca = 1; wait(k * .08).then(() => { sfx.pop(); appear(ped); appear(item); });
+      return { t, p, ped, item, next: 0, stop: 1.1 + k * .7, done: false };
+    });
+    await wait(.45);
+    for (let tt = 0; reels.some(r => !r.done); tt += .02) {
+      for (const r of reels) {
+        if (r.done || tt < r.next) continue;
+        if (tt >= r.stop) { // reel locks in
+          r.done = true; r.item.m = MODEL[r.t]; r.item.flash = 1; r.item.sqv -= 9; sfx.land(); sfx.buy();
+          burst([r.p[0], .7, r.p[2]], [1, .8, .3], 22, 4); shake = Math.max(shake, .25); punch = .6;
+          continue;
+        }
+        let m; do m = MODEL[pick(REELS[reels.indexOf(r)])]; while (m === r.item.m && REELS[reels.indexOf(r)].length > 1 && rand() < .9);
+        r.item.m = m; r.item.sqv += 4; sfx.tick();
+        r.next = tt + lerp(.05, .24, clamp((tt - (r.stop - .9)) / .9, 0, 1)); // slow down before stopping
+      }
+      await wait(.02);
+    }
+    const same = Math.max(...res.map(t => res.filter(q => q === t).length));
+    await wait(.35);
+    if (same === 3) { splash('JACKPOT', 'flash'); sfx.win(); shake = .5; coins([0, 0, z], 5); await wait(.9); }
+    else if (same === 2) { coins([0, 0, z], 2); await wait(.4); }
+    reels.forEach((r, k) => {
+      const slot = freeSlot(r.t); if (slot < 0) { vanish(r.item); vanish(r.ped); return; }
+      const u = addUnit(r.t, slot), e = r.item; ents.set(u.id, e);
+      Object.assign(e, { bob: 0, side: 0 });
+      wait(k * .12).then(() => {
+        vanish(r.ped); tw(.4, q => { e.lift = .5 * (1 - q); e.sc = lerp(.85, 1, q); });
+        return hop(e, TP(slot), .45, 1.1).then(() => land(e, slot));
+      });
+    });
+    await wait(1.1);
+    startBattle();
   }
   function freeSlot(t) {
     const used = new Set(run.army.map(u => u.slot));
@@ -533,7 +578,7 @@
   cv.addEventListener('pointermove', setMouse);
   cv.addEventListener('pointerdown', e => {
     sfx.init(); setMouse(e);
-    if (phase === 'title') { splash(null); sfx.click(); return startBattle(); }
+    if (phase === 'title') { splash(null); sfx.click(); return run.spun ? startBattle() : spin(); }
     if (phase === 'over') { sfx.click(); return newRun(); }
     downTile = hover; click(hover);
   });
@@ -560,13 +605,18 @@
     if (B) {
       if (lastMv) { set(lastMv.f, 3, C.last); set(lastMv.t, 3, C.last); }
       if (B.boss === 'tempest' && B.timer === 1) for (const i of edge(B.wind)) set(i, 3, C.wind);
-      for (const m of B.marks) set(m.i, m.s === 2 ? 4 : 3, C.lava);
       if (peek != null) for (const m of peekMoves) set(m.t, m.k ? 3 : 2, C.foe);
       if (sel != null) { set(sel, 1, C.sel); for (const m of selMoves) set(m.t, m.k ? 3 : 2, m.k ? C.cap : m.d ? C.danger : C.move); }
+      for (const m of B.marks) { // lava goes on top: erupting tiles override, warnings add an outer ring
+        if (m.s === 2) set(m.i, 4, C.lava);
+        else if (tileK[m.i] > 0 && tileK[m.i] < 10) tileK[m.i] += 10;
+        else if (!tileK[m.i]) set(m.i, 3, C.lava);
+      }
     } else if (shop && phase === 'shop') {
       for (const o of shop.offers) if (!o.sold) set(o.i, 3, run.gold >= o.price ? C.gold : C.no);
       if (sel != null) { for (let i = 0; i < 12; i++) set(i, 2, C.move); set(sel, 1, C.sel); }
     }
+    for (let i = 0; i < 36; i++) if (blastT[i] > 0) set(i, 20 + Math.min(1, blastT[i]), C.cap);
     if (hover >= 0 && !tileK[hover] && (phase === 'player' || phase === 'shop')) set(hover, 1, C.hover);
     for (let i = 0; i < 36; i++) tile[i * 4 + 3] = ty[i];
   }
@@ -594,6 +644,7 @@
     cam.pos = [mouse.nx * .4 + rand(-1, 1) * shake * .4, 8.6 * kz + rand(-1, 1) * shake * .4, 7.4 * kz]; cam.tgt = [mouse.nx * .1, .3, .1];
     for (let i = 0; i < 36; i++) { tv[i] += (-ty[i] * 320 - tv[i] * 13) * dt; ty[i] = clamp(ty[i] + tv[i] * dt, -.25, .2); }
     ambient(dt);
+    for (let i = 0; i < 36; i++) blastT[i] = Math.max(0, blastT[i] - rdt * 1.4);
     let nsh = 0;
     for (const e of all) {
       e.upd(dt);
@@ -611,7 +662,7 @@
     labels(); tip();
     if (Q.has('demo') && (demoT -= rdt) < 0) { // self-playing mode for testing
       demoT = .35;
-      if (phase === 'title') { splash(null); startBattle(); }
+      if (phase === 'title') { splash(null); run.spun ? startBattle() : spin(); }
       else if (phase === 'player') { const m = R.best(B.st, 2); if (m) playerMove(m); }
       else if (phase === 'shop') { const o = shop.offers.find(o => !o.sold && run.gold >= o.price && (o.rel || freeSlot(o.t) >= 0)); if (o) buy(o); else go(); }
       else if (phase === 'over') newRun();

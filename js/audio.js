@@ -48,5 +48,6 @@
     shoot: () => { noise(.12, .5, 3000, 0, .3); tone(500, .1, 'square', .2, .3); },
     shield: () => arp([880, 1320, 1760], .03, 'triangle', .2, .25),
     click: () => tone(440, .04, 'square', .1),
+    tick: () => tone(1000 + Math.random() * 300, .03, 'square', .07),
   };
 })(window.CL = window.CL || {});
