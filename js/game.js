@@ -71,6 +71,7 @@
       this.m = m; this.p = [p[0], p[1] || 0, p[2]]; this.pp = [p[0], p[2]]; this.yaw = 0; this.sc = 1; this.A = PA; this.B = PB;
       this.sq = 1; this.sqv = 0; this.lean = [0, 0]; this.lv = [0, 0]; this.sca = 0; this.flash = 0; this.rag = null;
       this.spin = 0; this.lift = 0; this.bob = 0; this.wob = 0; this.ph = rand(9); this.side = -1; this.dead = false; this.king = false;
+      this.slT = 0; this.it = rand(2, 7); this.act = null; this.at = 0; this.yo = 0; this.hy = 0; this.lost = null; this.hurt = 0; this.sl = 0;
       this.bones = new Float32Array(128);
     }
     upd(dt) {
@@ -82,6 +83,8 @@
         this.lean[0] += this.lv[0] * dt; this.lean[1] += this.lv[1] * dt;
         this.sqv += ((1 - this.sq) * 280 - this.sqv * 11) * dt; this.sq = clamp(this.sq + this.sqv * dt, .45, 1.7);
         this.flash = Math.max(0, this.flash - dt * 5); this.yaw += this.spin * dt;
+        this.sl += (this.slT - this.sl) * Math.min(1, dt * 16);
+        this.idle(dt, Math.hypot(vx, vz));
       }
       if (this.rag) { // ripped apart: every bone is its own rigid body
         const Ry = ry(this.yaw);
@@ -99,16 +102,35 @@
         }
         return;
       }
-      const sq = this.sq * (1 + Math.sin(t * 2.2) * .014), sxz = 1 / Math.sqrt(sq);
-      const Ry = ry(this.yaw + this.wob * Math.sin(t * 10) * .14);
-      const y = p[1] + this.lift + (this.m === 'ghost' ? .1 + Math.sin(t * 2.5) * .05 : 0) + this.bob * Math.sin(t * 2);
+      const jig = this.m === 'slime' ? Math.sin(t * 5.5) * .05 + Math.sin(t * 9.1) * .02 : Math.sin(t * 2.2) * .014;
+      const sq = this.sq * (1 + jig), sxz = 1 / Math.sqrt(sq);
+      const Ry = ry(this.yaw + this.yo + this.wob * Math.sin(t * 10) * .14);
+      const y = p[1] + this.lift + this.sl + this.hy + (this.m === 'ghost' ? .1 + Math.sin(t * 2.5) * .05 : 0) + this.bob * Math.sin(t * 2);
       for (let b = 0; b < md.nb; b++) {
+        if (this.lost && this.lost.includes(b)) { setBone(this.bones, b * 16, Ry, 0, 0, 0, p[0], -9, p[2]); continue; }
         const w = Math.min(1.5, md.cent[b][1] * 1.5);
         const Rm = mul3(mul3(rx(this.lean[1] * w), rz(-this.lean[0] * w)), Ry);
         setBone(this.bones, b * 16, Rm, sc * sxz, sc * sq, sc * sxz, p[0], y + Math.sin(t * 2.2 + 1) * .012 * w, p[2]);
       }
     }
   }
+  // Idle life for pieces standing on the board: glance around, little hops, squishes.
+  const IDLE = { frog: ['hop', 'hop', 'look'], slime: ['squish', 'hop'], golem: ['stomp', 'look'], ghost: ['look', 'spin'], knight: ['look', 'rear'], bomb: ['squish'], ram: ['stomp', 'look'], hook: ['look'] };
+  Ent.prototype.idle = function (dt, speed) {
+    if (this.side < 0 || this.rag || this.sca > .3) return;
+    if (speed > .2 || this.p[1] > .01) { this.act = null; this.yo *= .8; this.hy = 0; return; } // busy moving
+    if (!this.act && (this.it -= dt) < 0) { this.it = rand(3, 9); this.act = pick(IDLE[this.m] || ['look', 'look', 'squish']); this.at = 0; this.dir = rand() < .5 ? -1 : 1; }
+    if (!this.act) return;
+    const a = this.at += dt;
+    switch (this.act) {
+      case 'look': this.yo = Math.sin(Math.min(1, a / 1.4) * Math.PI) * .55 * this.dir; if (a > 1.4) this.act = null; break;
+      case 'spin': this.yo = Math.min(1, a / .8) * 6.2832 * this.dir; if (a > .8) { this.yo = 0; this.act = null; } break;
+      case 'hop': this.hy = Math.max(0, Math.sin(Math.min(1, a / .32) * Math.PI)) * .16; if (a > .32) { this.hy = 0; this.sqv -= 5; this.act = null; if (this.m === 'frog') sfx.croak(.4); } break;
+      case 'squish': if (a < .02) this.sqv -= 6; if (a > .3) this.act = null; break;
+      case 'stomp': if (a < .02) this.sqv += 4; if (a > .25 && a - dt <= .25) { this.sqv -= 9; if (this.p[0] > -3.2) for (let k = 0; k < 6; k++) { const q = rand(6.28); spark(this.p[0] + Math.cos(q) * .25, .04, this.p[2] + Math.sin(q) * .25, Math.cos(q), .5, Math.sin(q), [.75, .72, .68], .05, .4, { g: 3 }); } } if (a > .4) this.act = null; break;
+      case 'rear': this.lean[1] = -Math.sin(Math.min(1, a / .6) * Math.PI) * .25; if (a > .6) this.act = null; break;
+    }
+  };
   function mkEnt(m, p, o) { const e = Object.assign(new Ent(m, p), o); all.add(e); return e; }
   const appear = (e, d = .35) => { e.sca = 1; return tw(d, k => e.sca = 1 - k); };
   const vanish = (e, d = .35) => tw(d, k => e.sca = k).then(() => all.delete(e));
@@ -177,6 +199,16 @@
     if (v.king) { tscale = .2; tsReal = .9; } else hitstop();
     if (v.side === 1 && B) coins(v.p, 1 + (run.relics.includes('purse') ? 1 : 0));
   }
+  function hurt(v) { // a tough piece survives a hit: golems lose an arm and keep shedding dust
+    if (!v) return;
+    v.flash = 1; v.sqv -= 9; v.hurt = 1; sfx.crack();
+    burst([v.p[0], .5, v.p[2]], [.7, .65, .6], 16, 3.5); burst([v.p[0], .45, v.p[2]], [.45, .42, .4], 10, 2.5, { g: 14 });
+    if (v.m === 'golem') { // the arm breaks off and tumbles down as chunks
+      const s = v.side ? 1 : -1; v.lost = [3];
+      for (let k = 0; k < 9; k++) spark(v.p[0] + .28 * s, rand(.25, .6), v.p[2], rand(-.3, .3) + .8 * s, rand(1, 2.5), rand(-.5, .5), v.A, rand(.08, .13), rand(.8, 1.2), { g: 14 });
+    }
+    v.A = v.A.map(c => c * .82);
+  }
   function boomFx(p, r = 1) {
     const cx = Math.round(p[0] + 2.5), cy = Math.round(2.5 - p[2]); // blast area flashes red
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < 6 && y < 6) blastT[x + y * 6] = 1.6; }
@@ -233,7 +265,7 @@
 
   // ------------------------------------------------------------ run / army
   function clearAll() {
-    all.clear(); ents.clear(); shelf.length = 0; shop = null; choice = null; B = null; sel = peek = lastMv = null; selMoves = []; PT.length = 0; tweens.length = 0; gray = 0; tscale = 1;
+    all.clear(); ents.clear(); gho = null; shelf.length = 0; shop = null; choice = null; B = null; sel = peek = lastMv = null; selMoves = []; PT.length = 0; tweens.length = 0; gray = 0; tscale = 1;
   }
   function addUnit(t, slot) { const u = { t, slot, id: uid++ }; run.army.push(u); seen(t); return u; }
   function unitEnt(u, pop) {
@@ -409,28 +441,33 @@
         case 'move': {
           const to = TP(e.t), d = Math.hypot(to[0] - en.p[0], to[2] - en.p[2]), jump = en.m === 'knight' || en.m === 'frog';
           const v = e.cap != null ? ents.get(e.cap) : null, from = [en.p[0], 0, en.p[2]];
-          sfx.move();
+          sfx.step(en.m);
           await hop(en, to, .15 + d * .045, jump ? .7 : .2 + d * .05, v && (() => smash(v, from)));
           land(en, e.t); if (v) await wait(.12); break;
         }
         case 'die': smash(en, typeof e.src === 'number' ? TP(e.src) : e.src); await wait(.12); break;
         case 'boom': boomFx(TP(e.at), e.r); await wait(.12); break;
-        case 'pull': { // hook throws a chain, the target gets dragged in
-          const a = TP(e.f), b = TP(e.t), h = en.p, v = ents.get(e.tid); en.sqv -= 7; sfx.shoot();
-          for (let k = 0; k <= 12; k++) spark(lerp(h[0], a[0], k / 12), .6, lerp(h[2], a[2], k / 12), 0, 0, 0, [.75, .75, .85], .07, .25, { g: 0 });
-          if (v) { await hop(v, b, .25, .15); land(v, e.t); } await wait(.08); break;
+        case 'pull': { // hook flings a chain out, catches the target and reels it in
+          const b = TP(e.t), h = en.p, v = ents.get(e.tid), a0 = TP(e.f); en.sqv -= 7; sfx.chain();
+          const links = (tx, tz) => { // chain = alternating light/dark links redrawn each frame
+            const n = Math.max(3, Math.round(Math.hypot(tx - h[0], tz - h[2]) * 8));
+            for (let k = 0; k <= n; k++) { const q = k / n; spark(lerp(h[0], tx, q), lerp(.78, .45, q) + Math.sin(q * 3.14) * .08, lerp(h[2], tz, q), 0, 0, 0, k % 2 ? [.42, .42, .5] : [.86, .86, .95], k % 2 ? .045 : .065, .065, { g: 0, drag: 0 }); }
+          };
+          await tw(.15, k => links(lerp(h[0], a0[0], k), lerp(h[2], a0[2], k)));
+          if (v) { v.flash = .7; v.sqv += 6; sfx.chain(); const pr = hop(v, b, .3, .12); await tw(.3, () => links(v.p[0], v.p[2])); await pr; land(v, e.t); }
+          en.sqv += 5; break;
         }
         case 'ram': { // lunge; the target slides away if it has room
-          const a = [en.p[0], 0, en.p[2]], b = TP(e.t), v = ents.get(e.tid); sfx.move();
+          const a = [en.p[0], 0, en.p[2]], b = TP(e.t), v = ents.get(e.tid); sfx.thud();
           await hop(en, [lerp(a[0], b[0], .45), 0, lerp(a[2], b[2], .45)], .1, .1); shake = Math.max(shake, .3); punch = .8;
           if (e.to != null && v) { hop(v, TP(e.to), .2, .15).then(() => land(v, e.to)); }
           await hop(en, a, .1, .05); break;
         }
         case 'spawn': { // slime splits
           const from = TP(e.src), to = TP(e.at), n = mkEnt(MODEL[e.t], from, { side: e.s, yaw: e.s ? 0 : Math.PI, A: e.s ? EA : PA, B: e.s ? (B && B.boss ? BOSSCOL[B.boss][1] : EB) : PB, sc: .6 });
-          ents.set(e.id, n); sfx.pop(); tw(.3, k => n.sc = lerp(.6, 1, k)); hop(n, to, .3, .5).then(() => land(n, e.at)); await wait(.1); break;
+          ents.set(e.id, n); sfx.squelch(); tw(.3, k => n.sc = lerp(.6, 1, k)); hop(n, to, .3, .5).then(() => land(n, e.at)); await wait(.1); break;
         }
-        case 'hit': if (en) { en.flash = 1; en.sqv -= 9; burst([en.p[0], .5, en.p[2]], [.7, .65, .6], 14, 3); shake = Math.max(shake, .3); sfx.cap(); } await wait(.15); break;
+        case 'hit': hurt(en); shake = Math.max(shake, .3); await wait(.15); break;
         case 'shoot': {
           const a = TP(e.f), b = TP(e.t); en.sqv -= 7; sfx.shoot();
           for (let k = 0; k <= 14; k++) spark(lerp(a[0], b[0], k / 14), .55, lerp(a[2], b[2], k / 14), rand(-.3, .3), rand(.5), rand(-.3, .3), [1, .9, .5], .09, .2 + k * .012, { g: 0 });
@@ -441,7 +478,7 @@
         case 'bump': {
           const a = [en.p[0], 0, en.p[2]], b = TP(e.t);
           sfx.move(); await hop(en, [lerp(a[0], b[0], .6), 0, lerp(a[2], b[2], .6)], .12, .2);
-          if (e.hit != null) { const v = ents.get(e.hit); if (v) { v.flash = 1; v.sqv -= 9; burst([v.p[0], .5, v.p[2]], [.7, .65, .6], 14, 3); } sfx.cap(); }
+          if (e.hit != null) hurt(ents.get(e.hit));
           else { flashRelic('shield'); shieldFx(b); }
           shake = .3; await hop(en, a, .2, .35); land(en, e.f); break;
         }
@@ -455,10 +492,10 @@
       const c = R.clone(st); R.apply(c, m, null); m.d = false;
       if (c.w < 0 && c.turn === 1) { const j = c.b.findIndex(p => p && p.id === id); if (j >= 0) m.d = R.all(c, 1).some(x => x.t === j && x.k > 0); }
     }
-    const e = ents.get(id); if (e) { e.sqv += 5; e.wob = 1; }
+    const e = ents.get(id); if (e) { e.sqv += 5; e.wob = 1; e.slT = .16; }
     sfx.sel();
   }
-  function deselect() { if (sel != null && B) { const p = B.st.b[sel], e = p && ents.get(p.id); if (e) e.wob = 0; } sel = null; selMoves = []; }
+  function deselect() { if (sel != null && B) { const p = B.st.b[sel], e = p && ents.get(p.id); if (e) { e.wob = 0; e.slT = 0; } } sel = null; selMoves = []; }
 
   async function playerMove(m) {
     const st = B.st, ev = []; deselect(); peek = null; lastMv = null; phase = 'anim';
@@ -689,6 +726,14 @@
   }
 
   // ------------------------------------------------------------ frame
+  let gho = null;
+  function ghostUpd() { // translucent copy of the selected piece where it would land
+    const mv = phase === 'player' && sel != null && hover >= 0 && hover < 36 && selMoves.find(m => m.t === hover && m.k <= 1);
+    const p = mv && B.st.b[sel], src = p && ents.get(p.id);
+    if (!src) { if (gho) gho.sca = 1; return; }
+    if (!gho || gho.m !== src.m || !all.has(gho)) { if (gho) all.delete(gho); gho = mkEnt(src.m, TP(hover), { yaw: Math.PI, A: PA, B: PB }); }
+    const t = TP(hover); gho.p[0] = t[0]; gho.p[2] = t[2]; gho.sca = .12; gho.flash = .5; gho.lift = Math.sin(time * 4) * .03 + .04;
+  }
   function glows() {
     tileK.fill(0);
     const set = (i, k, c) => { if (i < 0) return; tileK[i] = k; tile[i * 4] = c[0]; tile[i * 4 + 1] = c[1]; tile[i * 4 + 2] = c[2]; };
@@ -697,6 +742,11 @@
       if (B.boss === 'tempest' && B.timer === 1) for (const i of edge(B.wind)) set(i, 3, C.wind);
       if (peek != null) for (const m of peekMoves) set(m.t, m.k ? 3 : 2, C.foe);
       if (sel != null) { set(sel, 1, C.sel); for (const m of selMoves) set(m.t, m.k ? 3 : 2, m.k ? C.cap : m.d ? C.danger : C.move); }
+      if (sel == null && phase === 'player' && hover >= 0 && hover < 36) { // threat preview
+        const st = B.st, h = st.b[hover];
+        if (h && h.s === 1) for (const m of R.moves(st, hover)) { const q = st.b[m.t]; if (q && q.s === 0) set(m.t, 3, C.cap); else if (!tileK[m.t]) set(m.t, 2, C.foe); }
+        else if (h && h.s === 0) for (let i = 0; i < 36; i++) { const q = st.b[i]; if (q && q.s === 1 && R.moves(st, i).some(m => m.k && m.t === hover)) set(i, 3, C.cap); }
+      }
       for (const m of B.marks) { // lava goes on top: erupting tiles override, warnings add an outer ring
         if (m.s === 2) set(m.i, 4, C.lava);
         else if (tileK[m.i] > 0 && tileK[m.i] < 10) tileK[m.i] += 10;
@@ -718,7 +768,14 @@
     if (B.boss === 'tempest' && rand() < dt * (B.timer === 1 ? 50 : 14)) {
       const [dx, dy] = B.wind; spark(rand(-4, 4) - dx * 4, rand(.2, 1.8), rand(-4, 4) + dy * 4, dx * rand(4, 7), 0, -dy * rand(4, 7), [.8, 1, 1], .05, rand(.8, 1.6), { g: 0, drag: 0 });
     }
-    for (const e of all) if (e.m === 'bomb' && !e.rag && e.sca < .1 && rand() < dt * 12) spark(e.p[0] + .07, e.p[1] + .82 * e.sq, e.p[2], rand(-.5, .5), rand(.5, 1.5), rand(-.5, .5), [1, rand(.5, .9), .2], .04, .3, { g: 2 });
+    for (const e of all) if (e.hurt && !e.rag && e.sca < .1 && rand() < dt * 4) spark(e.p[0] + rand(-.2, .2), rand(.3, .7), e.p[2] + rand(-.2, .2), 0, 0, 0, [.6, .57, .52], .04, .7, { g: 3 }); // cracked pieces shed dust
+    for (const e of all) if (e.m === 'bomb' && !e.rag && e.sca < .1 && rand() < dt * (bombNear(e) ? 45 : 12)) spark(e.p[0] + .07, e.p[1] + .82 * e.sq, e.p[2], rand(-.5, .5), rand(.5, 1.5), rand(-.5, .5), [1, rand(.5, .9), .2], .04, .3, { g: 2 });
+  }
+  function bombNear(e) { // fuse fizzes harder with an enemy next to it
+    if (!B) return false;
+    for (const [id, q] of ents) if (q === e) { const i = B.st.b.findIndex(p => p && p.id === id); if (i < 0) return false; const x = i % 6, y = (i / 6) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy, o = nx >= 0 && ny >= 0 && nx < 6 && ny < 6 && B.st.b[nx + ny * 6]; if (o && o.s !== B.st.b[i].s) return true; } return false; }
+    return false;
   }
   function hsv(h, s, v) { const f = n => { const k = (n + h * 6) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); }; return [f(5), f(3), f(1)]; }
 
@@ -742,7 +799,7 @@
       if (!e.rag && e.sca < .6 && nsh < 40 && Math.abs(e.p[0]) < 3.2) { shBuf[nsh * 4] = e.p[0]; shBuf[nsh * 4 + 1] = e.p[2]; shBuf[nsh * 4 + 2] = .42 * e.sc; shBuf[nsh * 4 + 3] = .6 * (1 - e.sca) * clamp(1 - (e.p[1] + e.lift) * .6, .2, 1); nsh++; }
     }
     const np = updParticles(dt);
-    glows();
+    ghostUpd(); glows();
     envBones.fill(0);
     for (let b = 0; b < 8; b++) { const o = b * 16; envBones[o] = envBones[o + 5] = envBones[o + 10] = envBones[o + 15] = 1; envBones[o + 13] = b === 0 ? 0 : b < 5 ? Math.sin(time * 1.6 + b * 1.7) * .06 : Math.sin(time * .5 + b * 2.1) * .3; }
     gfx.begin({ sun: cur.sun, amb: cur.amb, glow: cur.glow, time, tile, tileK, sh: shBuf, nsh });

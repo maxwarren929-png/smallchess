@@ -28,6 +28,7 @@
     s.connect(f); f.connect(g); g.connect(out); s.start(t); s.stop(t + d + .02);
   }
   const arp = (notes, step, type, v, len = .12) => notes.forEach((n, i) => tone(n, len, type, v, 1, i * step));
+  const STEP = {};
   G.sfx = {
     init,
     sel: () => tone(700, .05, 'square', .12, 1.3),
@@ -49,5 +50,16 @@
     shield: () => arp([880, 1320, 1760], .03, 'triangle', .2, .25),
     click: () => tone(440, .04, 'square', .1),
     tick: () => tone(1000 + Math.random() * 300, .03, 'square', .07),
+    croak: (v = 1) => { tone(230, .07, 'square', .16 * v, .7); tone(190, .1, 'square', .16 * v, .65, .08); },
+    whoosh: () => { noise(.4, .3, 300, 0, 7); tone(700, .35, 'sine', .07, .4); },
+    squelch: () => { tone(130, .16, 'sine', .4, 2.4); noise(.09, .25, 900, .03, .4); },
+    thud: () => { tone(75, .2, 'triangle', .55, .5); noise(.1, .4, 600, 0, .3); },
+    stomp: () => { tone(52, .28, 'sine', .6, .5); noise(.16, .35, 380, 0, .3); },
+    crack: () => { noise(.2, .6, 3800, 0, .15); tone(240, .09, 'square', .2, .4); noise(.3, .25, 500, .06, .5); },
+    chain: () => { for (let i = 0; i < 6; i++) { noise(.025, .22, 5200 + Math.random() * 2000, i * .03); tone(1300 + Math.random() * 600, .025, 'square', .05, 1, i * .03); } },
+    gallop: () => { tone(880, .035, 'triangle', .3, .6); tone(720, .035, 'triangle', .3, .6, .09); },
+    fizz: () => noise(.25, .18, 7000, 0, .6),
+    step(m) { (STEP[m] || G.sfx.move)(); },
   };
+  Object.assign(STEP, { frog: G.sfx.croak, ghost: G.sfx.whoosh, slime: G.sfx.squelch, ram: G.sfx.thud, golem: G.sfx.stomp, knight: G.sfx.gallop, bomb: G.sfx.fizz, hook: G.sfx.chain });
 })(window.CL = window.CL || {});
