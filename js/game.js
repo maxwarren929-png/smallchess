@@ -771,6 +771,32 @@
   }
   const env = S.env(LO); gfx.model('env', env);
   console.log('splats: env', env.n, 'models', total, 'in', (performance.now() - t0) | 0, 'ms');
+  // Portraits for the bestiary: render one model alone with the game's own pipeline, crop it, cache as an image.
+  const portraits = {}, pcv = document.createElement('canvas');
+  CL.portrait = (m, dark) => {
+    const key = m + (dark ? '-' : ''); if (portraits[key]) return portraits[key];
+    const c = gfx.cam, save = { pos: c.pos, tgt: c.tgt }, rel = !!RELICS[m], S = 64, h = cv.height;
+    const span = rel ? .75 : 1.3, d = h * span / S / (2 * Math.tan(c.fov / 2)), ty_ = rel ? .3 : .55; // distance so the model fills an S-px crop
+    c.pos = [0, ty_ + d * .38, d * .92]; c.tgt = [0, ty_, 0];
+    const e = new Ent(m, [0, 0, 0]); e.yaw = rel ? .4 : Math.PI + .5; e.ph = 0;
+    e.upd(0);
+    const th = TH.a0, x0 = ((cv.width - S) / 2) | 0, y0 = ((h - S) / 2) | 0;
+    pcv.width = pcv.height = S; const g = pcv.getContext('2d', { willReadFrequently: true }); g.imageSmoothingEnabled = false;
+    const shot = withModel => {
+      gfx.begin({ sun: th.sun, amb: th.amb, glow: th.glow, time: 0, tile: new Float32Array(144), tileK: new Float32Array(36), sh: shBuf, nsh: 0 });
+      if (withModel) gfx.draw(m, e.bones, { A: e.A, B: e.B });
+      gfx.end({ skyA: th.skyA, skyB: th.skyB, time: 0, flash: 0, gray: 0, fade: 1 });
+      g.drawImage(cv, x0, y0, S, S, 0, 0, S, S); return g.getImageData(0, 0, S, S);
+    };
+    const img = shot(true);
+    if (dark) { // silhouette: every pixel that differs from the empty background becomes ink
+      const bg = shot(false).data, d = img.data;
+      for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - bg[i]) + Math.abs(d[i + 1] - bg[i + 1]) + Math.abs(d[i + 2] - bg[i + 2]) > 6) { d[i] = 18; d[i + 1] = 13; d[i + 2] = 30; }
+    }
+    g.putImageData(img, 0, 0);
+    Object.assign(c, save);
+    return portraits[key] = pcv.toDataURL();
+  };
   CL.dbg = { // test hooks: lay out a board and fire moves without the enemy replying
     get st() { return { phase, run, B, shop, choice, ents, all }; },
     setup(list) {
