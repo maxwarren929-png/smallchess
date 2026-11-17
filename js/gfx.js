@@ -70,11 +70,17 @@ void main(){
   const FS = `#version 300 es
 precision mediump float;
 in vec3 vCol; in vec2 vQ; out vec4 o;
+uniform int uGrain;
 const float B[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 void main(){
   float d=dot(vQ,vQ); if(d>1.) discard;
-  ivec2 c=ivec2(gl_FragCoord.xy)&3;
-  if(exp(-d*2.) < .13+B[c.x+c.y*4]/16.*.4) discard;
+  ivec2 c=ivec2(gl_FragCoord.xy)&3; float b=B[c.x+c.y*4]/16., th;
+  if(uGrain==0) th=.13+b*.4;                       // classic: gappy, speckled
+  else if(uGrain==1) th=.18+b*.2;                  // soft
+  else if(uGrain==2){ ivec2 q=c&1; th=.14+float((q.x*2+q.y*3)&3)/4.*.12; } // fine
+  else if(uGrain==3) th=.12;                       // smooth: splats fill in
+  else th=.08;                                     // clean
+  if(exp(-d*2.) < th) discard;
   o=vec4(vCol,1.);
 }`;
   const PV = `#version 300 es
@@ -85,6 +91,7 @@ uniform sampler2D uCol, uDep;
 uniform vec3 uSkyA, uSkyB;
 uniform vec2 uRes;
 uniform float uT, uFlash, uGray, uFade, uNear, uFar;
+uniform int uGrain;
 out vec4 o;
 const float B[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 float lin(float z){ return 2.*uNear*uFar/(uFar+uNear-(2.*z-1.)*(uFar-uNear)); }
@@ -105,7 +112,11 @@ void main(){
   c=mix(c,vec3(dot(c,vec3(.3,.6,.1)))*vec3(.9,.95,1.1),uGray);
   c=mix(c,vec3(1.),uFlash)*uFade;
   ivec2 b=p&3; float th=B[b.x+b.y*4]/16.-.47;
-  c=floor(c*7.+.5+th*.85)/7.;
+  if(uGrain==0) c=floor(c*7.+.5+th*.85)/7.;          // classic: chunky 4x4 bayer
+  else if(uGrain==1) c=floor(c*10.+.5+th*.4)/10.;    // soft: gentle bayer, more shades
+  else if(uGrain==2){ ivec2 q=p&1; float t2=float((q.x*2+q.y*3)&3)/4.-.375; c=floor(c*9.+.5+t2*.6)/9.; } // fine: tiny 2x2
+  else if(uGrain==3) c=floor(c*12.+.5+th*.3)/12.;     // smooth: faint dither, many shades
+  // 4 clean: untouched
   o=vec4(c,1.);
 }`;
 
@@ -181,6 +192,7 @@ void main(){
     gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.useProgram(prog);
     gl.uniformMatrix4fv(U.uVP, false, cam.vp); gl.uniform3fv(U.uCam, cam.pos);
     gl.uniform3fv(U.uL, nrm([-.5, .75, .45])); gl.uniform3fv(U.uSun, o.sun); gl.uniform3fv(U.uAmb, o.amb); gl.uniform3fv(U.uC, o.glow);
+    gl.uniform1i(U.uGrain, grain);
     gl.uniform1f(U.uT, o.time); gl.uniform4fv(U.uTile, o.tile); gl.uniform1fv(U.uTileK, o.tileK);
     gl.uniform4fv(U.uSh, o.sh); gl.uniform1i(U.uNSh, o.nsh);
   }
@@ -204,6 +216,7 @@ void main(){
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, depT); gl.uniform1i(PU.uDep, 1);
     gl.uniform3fv(PU.uSkyA, o.skyA); gl.uniform3fv(PU.uSkyB, o.skyB); gl.uniform2f(PU.uRes, W, H);
     gl.uniform1f(PU.uT, o.time); gl.uniform1f(PU.uFlash, o.flash); gl.uniform1f(PU.uGray, o.gray); gl.uniform1f(PU.uFade, o.fade);
+    gl.uniform1i(PU.uGrain, grain);
     gl.uniform1f(PU.uNear, cam.near); gl.uniform1f(PU.uFar, cam.far);
     gl.bindVertexArray(empty); gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
@@ -217,5 +230,18 @@ void main(){
     const m = cam.vp, x = m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], y = m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], w = m[3] * p[0] + m[7] * p[1] + m[11] * p[2] + m[15];
     return [(x / w * .5 + .5) * W * px, (1 - (y / w * .5 + .5)) * H * px];
   }
-  G.gfx = { init, model, begin, draw, particles, end, ray, project, cam, size: () => [W * px, H * px] };
+  // grain style: 0 classic, 1 soft, 2 fine, 3 smooth, 4 clean. G cycles, remembered per browser.
+  const GRAINS = ['CLASSIC', 'SOFT', 'FINE', 'SMOOTH', 'CLEAN'];
+  let grain = 3;
+  try { const v = +localStorage.getItem('chesslite.grain'); if (localStorage.getItem('chesslite.grain') !== null && v >= 0 && v < 5) grain = v; } catch (e) { }
+  function setGrain(v) {
+    grain = (v + GRAINS.length) % GRAINS.length;
+    try { localStorage.setItem('chesslite.grain', grain); } catch (e) { }
+    let t = document.getElementById('grainTip');
+    if (!t) { t = document.createElement('div'); t.id = 'grainTip'; document.body.appendChild(t); }
+    t.textContent = 'GRAIN: ' + GRAINS[grain] + '  (' + (grain + 1) + '/' + GRAINS.length + ')';
+    t.classList.remove('on'); void t.offsetWidth; t.classList.add('on');
+  }
+  addEventListener('keydown', e => { if ((e.key === 'g' || e.key === 'G') && !e.repeat) setGrain(grain + (e.shiftKey ? -1 : 1)); });
+  G.gfx = { setGrain, grain: () => grain, init, model, begin, draw, particles, end, ray, project, cam, size: () => [W * px, H * px] };
 })(window.CL = window.CL || {});

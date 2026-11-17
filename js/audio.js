@@ -63,5 +63,5 @@
     drum: d => { const n = Math.floor(d / .05); for (let i = 0; i < n; i++) noise(.04, .1 + .25 * i / n, 1800, i * .05, .5); tone(110, d, 'triangle', .12, 1.5); },
     step(m) { (STEP[m] || G.sfx.move)(); },
   };
-  Object.assign(STEP, { frog: G.sfx.croak, ghost: G.sfx.whoosh, slime: G.sfx.squelch, ram: G.sfx.thud, golem: G.sfx.stomp, knight: G.sfx.gallop, bomb: G.sfx.fizz, hook: G.sfx.chain });
+  Object.assign(STEP, { frog: G.sfx.croak, ghost: G.sfx.whoosh, slime: G.sfx.squelch, ram: G.sfx.thud, golem: G.sfx.stomp, knight: G.sfx.gallop, bomb: G.sfx.fizz, hook: G.sfx.chain, lancer: G.sfx.gallop, mage: G.sfx.whoosh });
 })(window.CL = window.CL || {});

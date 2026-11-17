@@ -10,22 +10,26 @@
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
   const TP = i => [(i % 6) - 2.5, 0, 2.5 - ((i / 6) | 0)]; // tile -> world
 
-  const MODEL = { P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen', K: 'king', F: 'frog', X: 'bomb', G: 'ghost', C: 'cannon', H: 'hook', M: 'ram', S: 'slime', O: 'golem' };
-  const PRICE = { P: 2, N: 5, B: 5, R: 8, Q: 14, F: 5, X: 6, G: 6, C: 8, H: 7, M: 5, S: 4, O: 6 };
+  const MODEL = { P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen', K: 'king', F: 'frog', X: 'bomb', G: 'ghost', C: 'cannon', H: 'hook', M: 'ram', S: 'slime', O: 'golem', A: 'archer', W: 'mage', V: 'vampire', L: 'lancer' };
+  const PRICE = { P: 2, N: 5, B: 5, R: 8, Q: 14, F: 5, X: 6, G: 6, C: 8, H: 7, M: 5, S: 4, O: 6, A: 6, W: 6, V: 7, L: 7 };
   // starting slot machine: reel 0 always lands a unique piece, the others are mostly pawns
-  const REELS = [['F', 'X', 'G', 'C', 'H', 'M', 'S', 'O'], ['P', 'P', 'P', 'N', 'B', 'F', 'X'], ['P', 'P', 'P', 'N', 'B', 'G', 'C']];
+  const REELS = [['F', 'X', 'G', 'C', 'H', 'M', 'S', 'O', 'A', 'W', 'V', 'L'], ['P', 'P', 'P', 'N', 'B', 'F', 'X'], ['P', 'P', 'P', 'N', 'B', 'G', 'C']];
   const NAMES = {
     P: ['PAWN', 'steps up, takes diagonally'], N: ['KNIGHT', 'jumps in an L'], B: ['BISHOP', 'slides diagonally'], R: ['ROOK', 'slides straight'], Q: ['QUEEN', 'slides any way'], K: ['KING', 'lose it, lose the fight'],
     F: ['FROG', 'leaps 2'], X: ['BOMB', 'explodes 3x3'], G: ['GHOST', 'phases 2 diagonally'], C: ['CANNON', 'shoots 3'],
     H: ['HOOK', 'pulls a foe in'], M: ['RAM', 'shoves, crushes'], S: ['SLIME', 'splits into 2 pawns'], O: ['GOLEM', 'takes 2 hits'],
+    A: ['ARCHER', 'shoots 2 diagonally'], W: ['MAGE', 'swaps with an ally'], V: ['VAMPIRE', 'each kill: +1 range'], L: ['LANCER', 'charges 3, leaps'],
   };
   const RELICS = {
     shield: [9, 'AEGIS', 'blocks 1 capture'], frenzy: [12, 'FURY', 'capture = go again'], crown: [8, 'CROWN', 'king strides 2'], wings: [6, 'WINGS', 'pawns sidestep'],
     purse: [7, 'PURSE', '+1 per capture'], bolt: [8, 'BOLT', 'smites a foe'], egg: [6, 'EGG', 'free pawn'], thorns: [8, 'THORNS', 'pawns bite back'],
     heart: [12, 'HEART', 'king takes 2 hits'], boots: [6, 'BOOTS', 'lava-proof'], anchor: [6, 'ANCHOR', 'wind-proof'], piggy: [8, 'PIGGY', '+1 per 5 saved'],
     clover: [6, 'CLOVER', 'free reroll'], fuse: [9, 'FUSE', 'bigger bomb blasts'], scope: [7, 'SCOPE', 'cannon, hook +3 range'], horn: [7, 'HORN', 'pawns start ahead'],
+    goblet: [8, 'GOBLET', '+3 gold per win'], saddle: [7, 'SADDLE', 'knights step straight'], coupon: [8, 'COUPON', 'shop items cost 1 less'],
+    scythe: [9, 'SCYTHE', 'reaps 2 foe pawns'], medal: [7, 'MEDAL', 'pawns promote a row early'],
   };
   const BOSS = ['inferno', 'tempest', 'chaos', 'hive', 'frost', 'eclipse'];
+  const ACTS = 4, ROUNDS = ACTS * 3; // every act: two fights, then a boss
   CL.data = { NAMES, PRICE, RELICS, MODEL };
   const seen = t => CL.codex && CL.codex.seen(t), seenRel = k => CL.codex && CL.codex.seenRel(k);
   const PA = [.97, .92, .8], PB = [.25, .78, .82], EA = [.36, .27, .5], EB = [.98, .36, .32];
@@ -35,6 +39,7 @@
     a0: { skyA: [.06, .07, .2], skyB: [.2, .38, .52], tA: [.9, .84, .7], tB: [.33, .52, .56], glow: [.3, .95, 1], sun: [1.1, 1.04, .92], amb: [.42, .45, .7] },
     a1: { skyA: [.12, .05, .24], skyB: [.55, .27, .52], tA: [.92, .8, .82], tB: [.5, .36, .62], glow: [1, .5, .9], sun: [1.1, 1, .98], amb: [.5, .4, .7] },
     a2: { skyA: [.03, .03, .09], skyB: [.3, .13, .24], tA: [.8, .78, .8], tB: [.3, .29, .4], glow: [1, .3, .45], sun: [1.05, 1, 1.05], amb: [.4, .38, .6] },
+    a3: { skyA: [.14, .08, .04], skyB: [.75, .5, .25], tA: [.95, .88, .7], tB: [.55, .42, .3], glow: [1, .8, .4], sun: [1.15, 1.05, .9], amb: [.55, .48, .5] },
     inferno: { skyA: [.16, .03, .02], skyB: [.8, .32, .08], tA: [.86, .68, .5], tB: [.4, .22, .2], glow: [1, .6, .1], sun: [1.2, .98, .76], amb: [.6, .36, .4] },
     tempest: { skyA: [.07, .12, .17], skyB: [.42, .58, .6], tA: [.8, .88, .88], tB: [.3, .44, .52], glow: [.7, 1, 1], sun: [1, 1.06, 1.1], amb: [.42, .52, .66] },
     hive: { skyA: [.14, .08, .02], skyB: [.62, .42, .1], tA: [.95, .82, .5], tB: [.55, .38, .15], glow: [1, .75, .2], sun: [1.15, 1.02, .8], amb: [.6, .48, .35] },
@@ -117,7 +122,7 @@
     }
   }
   // Idle life for pieces standing on the board: glance around, little hops, squishes.
-  const IDLE = { frog: ['hop', 'hop', 'look'], slime: ['squish', 'hop'], golem: ['stomp', 'look'], ghost: ['look', 'spin'], knight: ['look', 'rear'], bomb: ['squish'], ram: ['stomp', 'look'], hook: ['look'] };
+  const IDLE = { frog: ['hop', 'hop', 'look'], slime: ['squish', 'hop'], golem: ['stomp', 'look'], ghost: ['look', 'spin'], knight: ['look', 'rear'], bomb: ['squish'], ram: ['stomp', 'look'], hook: ['look'], archer: ['look', 'look'], mage: ['spin', 'look'], vampire: ['look', 'squish'], lancer: ['rear', 'look'] };
   Ent.prototype.idle = function (dt, speed) {
     if (this.side < 0 || this.rag || this.sca > .3) return;
     if (speed > .2 || this.p[1] > .01) { this.act = null; this.yo *= .8; this.hy = 0; return; } // busy moving
@@ -235,7 +240,7 @@
   // ------------------------------------------------------------ hud
   function hud() {
     $('#gold span').textContent = run.gold;
-    $('#track').innerHTML = Array.from({ length: 9 }, (_, i) => `<i class="${i % 3 === 2 ? 'boss ' : ''}${i < run.round ? 'done' : i === run.round ? 'now' : ''}"></i>`).join('');
+    $('#track').innerHTML = Array.from({ length: ROUNDS }, (_, i) => `<i class="${i % 3 === 2 ? 'boss ' : ''}${i < run.round ? 'done' : i === run.round ? 'now' : ''}"></i>`).join('');
     let t = '';
     if (B && (B.boss === 'tempest' || B.boss === 'chaos' || B.boss === 'hive')) {
       t = B.boss === 'chaos' ? '?' : B.boss === 'hive' ? '+' : B.wind[0] > 0 ? '&rarr;' : B.wind[0] < 0 ? '&larr;' : B.wind[1] > 0 ? '&uarr;' : '&darr;';
@@ -277,14 +282,14 @@
   }
   function newRun() {
     clearAll();
-    run = { gold: +(Q.get('g') || 3), round: +(Q.get('r') || 0), relics: [], army: [], bosses: BOSS.slice().sort(() => rand() - .5).slice(0, 3) };
-    if (Q.get('boss')) run.bosses = [0, 1, 2].map(() => Q.get('boss')); // ?boss=frost forces every boss (testing)
+    run = { gold: +(Q.get('g') || 3), round: +(Q.get('r') || 0), relics: [], army: [], bosses: BOSS.slice().sort(() => rand() - .5).slice(0, ACTS) };
+    if (Q.get('boss')) run.bosses = BOSS.slice(0, ACTS).map(() => Q.get('boss')); // ?boss=frost forces every boss (testing)
     unitEnt(addUnit('K', 2), true);
     run.spun = Q.has('start');
     (Q.get('start') || '').split('').filter(t => PRICE[t]).forEach(t => { const s = freeSlot(t); if (s >= 0) unitEnt(addUnit(t, s), true); });
     (Q.get('relics') || '').split(',').filter(k => RELICS[k]).forEach(addRelic);
     (Q.get('army') || '').split('').filter(t => PRICE[t]).forEach(t => { const s = freeSlot(t); if (s >= 0) unitEnt(addUnit(t, s), true); });
-    theme = TH['a' + Math.min(2, (run.round / 3) | 0)];
+    theme = TH['a' + Math.min(ACTS - 1, (run.round / 3) | 0)];
     phase = 'title'; hud(); splash('CHESSLITE', 'show', '&#9654;');
   }
   let leverGo = null, rainbowT = 0;
@@ -301,17 +306,17 @@
     const reels = res.map((t, k) => {
       const p = [(k - 1) * 1.3, 0, z], ped = mkEnt('ped', p, {}), item = mkEnt(MODEL[pick(REELS[k])], p, { lift: .5, sc: .85, bob: .05, yaw: Math.PI });
       raise(ped, item, k * .1, -1);
-      const slow = k === 2 && tease ? 2.1 : .9;
-      return { k, t, p, ped, item, next: 0, stop: 1.1 + k * .7 + (k === 2 && tease ? 1.3 : 0), slow, done: false };
+      const slow = k === 2 && tease ? 1.1 : .5;
+      return { k, t, p, ped, item, next: 0, stop: .55 + k * .35 + (k === 2 && tease ? .7 : 0), slow, done: false };
     });
     // the lever: wobbles until clicked, then gets yanked and springs back
     const lev = mkEnt('lever', [2.7, 0, z], { yaw: -.45, sc: 1.45 }); appear(lev); dust(lev.p);
-    await wait(.85);
+    await wait(.5);
     phase = 'lever'; lev.wob = 1;
     const glow = setInterval(() => { lev.flash = .5; }, 600);
     await new Promise(r => leverGo = r); leverGo = null; clearInterval(glow);
     phase = 'anim'; lev.wob = 0; sfx.click();
-    await tw(.2, k => { lev.lean[1] = k * k * 1.1; lev.lv[1] = 0; });
+    await tw(.14, k => { lev.lean[1] = k * k * 1.1; lev.lv[1] = 0; });
     sfx.thud(); sfx.chain(); shake = .3; punch = .8; dust([lev.p[0], 0, lev.p[2] + .3], 8);
     for (const r of reels) { r.item.spin = 24; r.item.flash = .8; }
     let drum = false;
@@ -327,7 +332,7 @@
           sfx.stomp(); sfx.buy(); shake = Math.max(shake, .35); punch = 1.3;
           for (let q = 0; q < 40; q++) spark(r.p[0] + rand(-.22, .22), rand(.4, 1), r.p[2] + rand(-.22, .22), 0, rand(4, 11), 0, [1, .92, .55], rand(.05, .09), rand(.3, .6), { g: 0, drag: 1.5 });
           burst([r.p[0], .7, r.p[2]], [1, .8, .3], 22, 4);
-          if (tease && r.k === 1 && !drum) { drum = true; sfx.drum(1.3); }
+          if (tease && r.k === 1 && !drum) { drum = true; sfx.drum(.75); }
           continue;
         }
         let m; do m = MODEL[pick(REELS[r.k])]; while (m === r.item.m && REELS[r.k].length > 1 && rand() < .9);
@@ -335,27 +340,27 @@
         r.item.m = m; r.item.sqv += 4; sfx.tick(1 + prog * .9);
         r.item.spin = lerp(24, 5, prog);
         if (r.k === 2 && tease && prog > 0) { r.item.flash = .6; punch = Math.max(punch, prog * .5); }
-        r.next = tt + lerp(.05, r.k === 2 && tease ? .4 : .24, prog); // slow down before stopping
+        r.next = tt + lerp(.045, r.k === 2 && tease ? .3 : .17, prog); // slow down before stopping
       }
       await wait(.02);
     }
     vanish(lev);
     const same = Math.max(...res.map(t => res.filter(q => q === t).length));
-    await wait(.35);
+    await wait(.2);
     if (same === 3) {
       splash('JACKPOT', 'flash'); sfx.win(); shake = .6; punch = 2; rainbowT = 2.6; coins([0, 0, z], 5);
-      fountain([0, 0, z], 90, 1.6); confetti(160); wait(.5).then(() => confetti(120)); await wait(1.6);
-    } else if (same === 2) { rainbowT = .9; coins([0, 0, z], 2); fountain([0, 0, z], 25, .6); confetti(40); await wait(.6); }
+      fountain([0, 0, z], 90, 1.6); confetti(160); wait(.4).then(() => confetti(120)); await wait(1.1);
+    } else if (same === 2) { rainbowT = .9; coins([0, 0, z], 2); fountain([0, 0, z], 25, .6); confetti(40); await wait(.4); }
     reels.forEach((r, k) => {
       const slot = freeSlot(r.t); if (slot < 0) { vanish(r.item); vanish(r.ped); return; }
       const u = addUnit(r.t, slot), e = r.item; ents.set(u.id, e);
       Object.assign(e, { bob: 0, side: 0 });
-      wait(k * .12).then(() => {
+      wait(k * .08).then(() => {
         sink(r.ped); tw(.4, q => { e.lift = .5 * (1 - q); e.sc = lerp(.85, 1, q); });
-        return hop(e, TP(slot), .45, 1.1).then(() => land(e, slot));
+        return hop(e, TP(slot), .38, 1.1).then(() => land(e, slot));
       });
     });
-    await wait(1.1);
+    await wait(.75);
     nextFight();
   }
   function freeSlot(t) {
@@ -369,25 +374,29 @@
     shelf.push({ k, e }); appear(e); return e;
   }
 
+  const BUDGET = [4, 7, 11, 13, 17, 22, 22, 27, 34, 30, 36, 44];
   function genEnemy(r, o = {}) {
-    const act = (r / 3) | 0, boss = r % 3 === 2, budget = Math.round([4, 7, 11, 13, 17, 22, 22, 27, 34][r] * (o.mult || 1));
-    const pool = o.pool || [['N', 'B', 'F', 'S', 'M'], ['N', 'B', 'F', 'R', 'X', 'G', 'H', 'S', 'M', 'O'], ['N', 'B', 'R', 'X', 'G', 'C', 'Q', 'F', 'H', 'O', 'M']][act];
+    const act = (r / 3) | 0, boss = r % 3 === 2, budget = Math.round(BUDGET[r] * (o.mult || 1));
+    const pool = o.pool || FOEPOOL[act];
     let pawns = Math.min(6, 2 + act + ((Math.random() * 2) | 0) + (boss ? 1 : 0));
     if (o.pool) pawns = Math.max(1, Math.min(pawns, budget - Math.min(...o.pool.map(t => R.VAL[t])))); // always field at least one signature piece
-    let left = budget - pawns; const big = [];
-    while (left >= 3 && big.length < 5) { const c = pool.filter(t => R.VAL[t] <= left); if (!c.length) break; const t = pick(c); big.push(t); left -= R.VAL[t]; }
-    pawns = Math.min(6, pawns + left);
+    let left = budget - pawns; const big = [], maxBig = act >= 3 ? 8 : 5; // last act: big pieces spill into the front row
+    while (left >= 3 && big.length < maxBig) { const c = pool.filter(t => R.VAL[t] <= left); if (!c.length) break; const t = pick(c); big.push(t); left -= R.VAL[t]; }
+    const front = Math.max(0, big.length - 5);
+    pawns = Math.min(6 - front, pawns + left);
     const kx = 2 + ((Math.random() * 2) | 0), out = [{ t: 'K', i: 30 + kx, boss }];
     const near = () => [0, 1, 2, 3, 4, 5].map(x => [x, Math.abs(x - kx) + rand(1.2)]).sort((a, b) => a[1] - b[1]).map(a => a[0]);
-    const back = near().filter(x => x !== kx).sort(() => rand() - .5); big.forEach((t, k) => out.push({ t, i: 30 + back[k] }));
-    near().slice(0, pawns).forEach(x => out.push({ t: 'P', i: 24 + x }));
+    const back = near().filter(x => x !== kx).sort(() => rand() - .5); big.slice(0, 5).forEach((t, k) => out.push({ t, i: 30 + back[k] }));
+    const fr = near(); big.slice(5).forEach((t, k) => out.push({ t, i: 24 + fr[k] }));
+    fr.slice(front, front + pawns).forEach(x => out.push({ t: 'P', i: 24 + x }));
     return out;
   }
 
   // ------------------------------------------------------------ pick your fight
   // Before each normal fight: three armies on pedestals, easy / medium / hard. Hover previews the lineup.
   const DIFF = [{ mult: .8, gold: 0 }, { mult: 1, gold: 2 }, { mult: 1.3, gold: 5 }];
-  const FOEPOOL = [['N', 'B', 'F', 'S', 'M'], ['N', 'B', 'F', 'R', 'X', 'G', 'H', 'S', 'M', 'O'], ['N', 'B', 'R', 'X', 'G', 'C', 'Q', 'F', 'H', 'O', 'M']];
+  const FOEPOOL = [['N', 'B', 'F', 'S', 'M', 'A'], ['N', 'B', 'F', 'R', 'X', 'G', 'H', 'S', 'M', 'O', 'A', 'W'], ['N', 'B', 'R', 'X', 'G', 'C', 'Q', 'F', 'H', 'O', 'M', 'W', 'V', 'L'],
+    ['R', 'Q', 'C', 'O', 'V', 'L', 'W', 'A', 'X', 'G', 'H', 'N']];
   async function nextFight() {
     const r = run.round; if (r % 3 === 2) return startBattle();
     phase = 'anim'; theme = TH['a' + ((r / 3) | 0)];
@@ -426,7 +435,7 @@
     theme = TH[boss || 'a' + ((r / 3) | 0)];
     const st = R.state();
     for (const u of run.army) st.b[u.slot] = { id: u.id, t: u.t, s: 0, hp: u.t === 'K' && has('heart') ? 2 : R.hpOf(u.t) };
-    st.f = { shield: has('shield') ? 1 : 0, crown: has('crown'), wings: has('wings'), frenzy: has('frenzy'), thorns: has('thorns'), fuse: has('fuse'), scope: has('scope') };
+    st.f = { shield: has('shield') ? 1 : 0, crown: has('crown'), wings: has('wings'), frenzy: has('frenzy'), thorns: has('thorns'), fuse: has('fuse'), scope: has('scope'), saddle: has('saddle'), medal: has('medal') };
     B = { st, boss, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: 2, bonus: opt ? opt.gold : 0 };
     hud();
     for (const f of opt ? opt.foes : genEnemy(r)) {
@@ -451,6 +460,10 @@
       const c = []; st.b.forEach((p, i) => { if (p && p.s === 1 && p.t !== 'K') c.push(i); });
       if (c.length) { const i = pick(c), ev = [], q = []; flashRelic('bolt'); boltFx(TP(i)); R.kill(st, i, ev, i, q); R.booms(st, ev, q); await play(ev); await wait(.3); }
     }
+    if (has('scythe')) { // two enemy pawns get reaped before the fight
+      const c = []; st.b.forEach((p, i) => { if (p && p.s === 1 && p.t === 'P') c.push(i); }); c.sort(() => rand() - .5);
+      if (c.length) { const ev = [], q = []; flashRelic('scythe'); for (const i of c.slice(0, 2)) { boltFx(TP(i)); R.kill(st, i, ev, i, q); } R.booms(st, ev, q); await play(ev); await wait(.3); }
+    }
     if (boss === 'inferno') addMarks(3);
     if (boss === 'frost') addIce(3);
     if (boss === 'hive') hivePick();
@@ -472,6 +485,14 @@
     B.st.doom = any ? d : null;
   }
 
+  // ranged pieces swing round to face their target before firing, then turn back
+  const angTo = (from, to) => ((to - from) % 6.2832 + 9.4248) % 6.2832 - 3.1416; // shortest signed turn
+  async function aim(en, to) {
+    const y0 = en.yaw, d = angTo(y0, Math.atan2(to[0] - en.p[0], to[2] - en.p[2]));
+    if (Math.abs(d) > .05) { sfx.tick(.6); await tw(.06 + Math.abs(d) * .05, k => en.yaw = y0 + d * (1 - (1 - k) * (1 - k))); }
+    return y0;
+  }
+  const unaim = (en, y0) => wait(.3).then(() => { const y1 = en.yaw, d = angTo(y1, y0); return tw(.22, k => en.yaw = y1 + d * k * k * (3 - 2 * k)); });
   async function play(evs) {
     for (const e of evs) {
       const en = ents.get(e.id);
@@ -486,14 +507,14 @@
         case 'die': smash(en, typeof e.src === 'number' ? TP(e.src) : e.src); await wait(.12); break;
         case 'boom': boomFx(TP(e.at), e.r); await wait(.12); break;
         case 'pull': { // hook flings a chain out, catches the target and reels it in
-          const b = TP(e.t), h = en.p, v = ents.get(e.tid), a0 = TP(e.f); en.sqv -= 7; sfx.chain();
+          const b = TP(e.t), h = en.p, v = ents.get(e.tid), a0 = TP(e.f), y0 = await aim(en, a0); en.sqv -= 7; sfx.chain();
           const links = (tx, tz) => { // chain = alternating light/dark links redrawn each frame
             const n = Math.max(3, Math.round(Math.hypot(tx - h[0], tz - h[2]) * 8));
             for (let k = 0; k <= n; k++) { const q = k / n; spark(lerp(h[0], tx, q), lerp(.78, .45, q) + Math.sin(q * 3.14) * .08, lerp(h[2], tz, q), 0, 0, 0, k % 2 ? [.42, .42, .5] : [.86, .86, .95], k % 2 ? .045 : .065, .065, { g: 0, drag: 0 }); }
           };
           await tw(.15, k => links(lerp(h[0], a0[0], k), lerp(h[2], a0[2], k)));
           if (v) { v.flash = .7; v.sqv += 6; sfx.chain(); const pr = hop(v, b, .3, .12); await tw(.3, () => links(v.p[0], v.p[2])); await pr; land(v, e.t); }
-          en.sqv += 5; break;
+          en.sqv += 5; unaim(en, y0); break;
         }
         case 'ram': { // lunge; the target slides away if it has room
           const a = [en.p[0], 0, en.p[2]], b = TP(e.t), v = ents.get(e.tid); sfx.thud();
@@ -505,11 +526,22 @@
           const from = TP(e.src), to = TP(e.at), n = mkEnt(MODEL[e.t], from, { side: e.s, yaw: e.s ? 0 : Math.PI, A: e.s ? EA : PA, B: e.s ? (B && B.boss ? BOSSCOL[B.boss][1] : EB) : PB, sc: .6 });
           ents.set(e.id, n); sfx.squelch(); tw(.3, k => n.sc = lerp(.6, 1, k)); hop(n, to, .3, .5).then(() => land(n, e.at)); await wait(.1); break;
         }
+        case 'swap': { // mage: both pieces blink and trade places
+          const v = ents.get(e.tid); sfx.morph(); en.flash = 1; if (v) v.flash = 1;
+          burst([en.p[0], .5, en.p[2]], [.5, .8, 1], 16, 2.5); if (v) burst([v.p[0], .5, v.p[2]], [.5, .8, 1], 16, 2.5);
+          await Promise.all([hop(en, TP(e.t), .3, .6), v ? hop(v, TP(e.f), .3, .6) : 0]);
+          land(en, e.t); if (v) land(v, e.f); break;
+        }
+        case 'grow': en.flash = 1; en.sqv -= 9; sfx.morph(); burst([en.p[0], .6, en.p[2]], [1, .2, .25], 20, 3); await wait(.1); break;
         case 'hit': hurt(en); shake = Math.max(shake, .3); await wait(.15); break;
         case 'shoot': {
-          const a = TP(e.f), b = TP(e.t); en.sqv -= 7; sfx.shoot();
-          for (let k = 0; k <= 14; k++) spark(lerp(a[0], b[0], k / 14), .55, lerp(a[2], b[2], k / 14), rand(-.3, .3), rand(.5), rand(-.3, .3), [1, .9, .5], .09, .2 + k * .012, { g: 0 });
-          await wait(.1); break;
+          const a = TP(e.f), b = TP(e.t), y0 = await aim(en, b), l = Math.hypot(b[0] - a[0], b[2] - a[2]) || 1, ux = (b[0] - a[0]) / l, uz = (b[2] - a[2]) / l;
+          en.sqv -= 7; sfx.shoot(); punch = Math.max(punch, .5);
+          tw(.18, k => { const r = Math.sin(k * Math.PI) * (1 - k) * .3; en.p[0] = a[0] - ux * r; en.p[2] = a[2] - uz * r; }); // recoil
+          const mx = a[0] + ux * .35, mz = a[2] + uz * .35; // muzzle
+          for (let k = 0; k < 10; k++) spark(mx, .6, mz, ux * rand(1, 3) + rand(-.6, .6), rand(.2, 1), uz * rand(1, 3) + rand(-.6, .6), [.45, .42, .45], rand(.05, .09), rand(.3, .6), { g: -.5, drag: 2 });
+          for (let k = 0; k <= 14; k++) spark(lerp(mx, b[0], k / 14), .55, lerp(mz, b[2], k / 14), rand(-.3, .3), rand(.5), rand(-.3, .3), [1, .9, .5], .09, .2 + k * .012, { g: 0 });
+          unaim(en, y0); await wait(.1); break;
         }
         case 'promo': sfx.morph(); sflash = .2; await morph(en, 'queen'); break;
         case 'shield': flashRelic('shield'); shieldFx(TP(e.at)); await wait(.15); break;
@@ -579,7 +611,7 @@
       R.booms(st, ev, q);
       if (any) { sfx.boom(); shake = Math.max(shake, .45); sflash = .2; await wait(.15); }
       await play(ev);
-      B.marks = B.marks.filter(m => m.s < 2); B.marks.forEach(m => m.s = 2); addMarks(B.n > 5 ? 3 : 2);
+      B.marks = B.marks.filter(m => m.s < 2); B.marks.forEach(m => m.s = 2); addMarks(1);
     } else if (B.boss === 'tempest') {
       if (--B.timer <= 0) { await gust(); B.timer = 2; B.wind = pick([[1, 0], [-1, 0], [0, 1], [0, -1]]); }
     } else if (B.boss === 'chaos') {
@@ -637,7 +669,7 @@
     sfx.morph(); sflash = .35; shake = Math.max(shake, .3);
     for (let i = 0; i < 36; i++) {
       const p = st.b[i]; if (!p || p.t === 'K') continue;
-      const t = pick(bag.filter(t => t !== p.t)); st.b[i] = { ...p, t, hp: R.hpOf(t) };
+      const t = pick(bag.concat(['A', 'W', 'V', 'L']).filter(t => t !== p.t)); st.b[i] = { ...p, t, hp: R.hpOf(t) };
       const e = ents.get(p.id); if (e) jobs.push(morph(e, MODEL[t])); seen(t);
     }
     await Promise.all(jobs);
@@ -647,8 +679,9 @@
     phase = 'anim'; sfx.win(); B.marks = []; lastMv = null;
     for (const [id, e] of [...ents]) if (e.side === 1) { ents.delete(id); e.dead = true; vanish(e); burst([e.p[0], .4, e.p[2]], e.B, 8, 3); await wait(.05); }
     coins([0, 0, 0], 4 + run.round + B.bonus); await wait(.9);
+    if (run.relics.includes('goblet')) { flashRelic('goblet'); coins([-3, 0, 1], 3); await wait(.5); }
     if (run.relics.includes('piggy') && run.gold >= 5) { flashRelic('piggy'); coins([-3, 0, 1], Math.min(5, (run.gold / 5) | 0)); await wait(.6); }
-    if (run.round >= 8) {
+    if (run.round >= ROUNDS - 1) {
       phase = 'over'; splash('VICTORY', 'show', '&#9654;');
       for (let k = 0; k < 12; k++) wait(k * .25).then(() => burst([rand(-3, 3), rand(1, 3), rand(-3, 3)], [rand(.4, 1), rand(.4, 1), rand(.4, 1)], 40, 6, { g: 5 }));
       return;
@@ -706,16 +739,34 @@
     }
   }
   function roll() {
-    const act = Math.min(2, ((run.round + 1) / 3) | 0);
-    const pool = [['P', 'P', 'N', 'B', 'F', 'S', 'M'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H'], ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O']][act];
+    const act = Math.min(ACTS - 1, ((run.round + 1) / 3) | 0);
+    const pool = [['P', 'P', 'N', 'B', 'F', 'S', 'M', 'A'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H', 'A', 'W', 'L'], ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W'],
+      ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W', 'A']][act];
     const rel = Object.keys(RELICS).filter(k => !run.relics.includes(k)).sort(() => rand() - .5);
-    const offs = [{ t: pick(pool) }, { t: pick(pool) }, rel.length > 1 && rand() < .5 ? { rel: rel[1] } : { t: pick(['F', 'X', 'G', 'C', 'H', 'M', 'S', 'O']) }, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
+    const offs = [{ t: pick(pool) }, { t: pick(pool) }, rel.length > 1 && rand() < .5 ? { rel: rel[1] } : { t: pick(REELS[0]) }, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
     shop.offers = offs.map((o, k) => {
       const i = 19 + k, p = TP(i), ped = mkEnt('ped', p, {}), item = mkEnt(o.rel || MODEL[o.t], p, { lift: .5, spin: 1.2, sc: .85, bob: .05 });
       raise(ped, item, k * .09, i);
       if (o.rel) seenRel(o.rel); else seen(o.t);
-      return { ...o, i, ped, item, price: o.rel ? RELICS[o.rel][0] : PRICE[o.t], sold: false };
+      return { ...o, i, ped, item, price: cost(o.rel ? RELICS[o.rel][0] : PRICE[o.t]), sold: false };
     });
+  }
+  const cost = p => run.relics.includes('coupon') ? Math.max(1, p - 1) : p;
+  const sellValue = t => Math.max(1, (PRICE[t] / 2) | 0);
+  function sellable() { if (phase !== 'shop' || sel == null) return null; const u = run.army.find(u => u.slot === sel); return u && u.t !== 'K' ? u : null; }
+  let sellShown = '';
+  function sellBtn() { // only visible while a non-king piece is picked up in the shop
+    const u = sellable(), key = u ? u.id + ':' + u.t : '';
+    if (key === sellShown) return; sellShown = key;
+    $('#sell').classList.toggle('on', !!u); if (u) $('#sell span').textContent = '+' + sellValue(u.t);
+  }
+  function sell() { // refund half the price, freeing the slot for something better
+    const u = sellable(); if (!u) return;
+    const e = ents.get(u.id); sel = null;
+    run.army = run.army.filter(x => x !== u); ents.delete(u.id);
+    if (e) { e.wob = 0; e.flash = 1; e.spin = 14; burst([e.p[0], .5, e.p[2]], e.A, 18, 3.5); burst([e.p[0], .5, e.p[2]], [.25, .2, .25], 12, 2.5, { g: 3 }); vanish(e, .3); }
+    tv[u.slot] -= 2; sfx.whoosh(); shake = Math.max(shake, .2);
+    coins(TP(u.slot), sellValue(u.t)); sellBtn();
   }
   function nope(o, broke) { sfx.err(); o.item.wob = 1; o.item.sqv += 6; o.sh = 1; if (broke) poor(); setTimeout(() => o.item.wob = 0, 350); }
   function buy(o) {
@@ -735,7 +786,7 @@
           Object.assign(e, { bob: 0, side: 0 }); tw(.4, k => { e.lift = .5 * (1 - k); e.sc = lerp(.85, 1, k); e.yaw = lerp(e.yaw % 6.2832, Math.PI, k); });
           hop(e, TP(slot), .45, 1.1).then(() => land(e, slot));
         } else {
-          all.delete(e); const s = addRelic(o.rel); s.sca = 0; const to = s.p.slice(); s.p[0] = e.p[0]; s.p[1] = .5; s.p[2] = e.p[2];
+          all.delete(e); const s = addRelic(o.rel); if (o.rel === 'coupon') shop && shop.offers.forEach(q => { if (!q.sold) q.price = Math.max(1, q.price - 1); }); s.sca = 0; const to = s.p.slice(); s.p[0] = e.p[0]; s.p[1] = .5; s.p[2] = e.p[2];
           tw(.5, k => { const q = k * k * (3 - 2 * k); s.p[0] = lerp(e.p[0], to[0], q); s.p[2] = lerp(e.p[2], to[2], q); s.p[1] = lerp(.5, to[1], q) + Math.sin(k * 3.14) * 1.2; }).then(() => { s.sqv -= 8; s.flash = 1; sfx.land(); });
         }
       });
@@ -759,6 +810,8 @@
     shop = null; run.round++; sfx.click(); nextFight(); hud();
   }
   $('#go').onclick = go;
+  $('#sell').onclick = sell;
+  addEventListener('keydown', e => { if (e.key === 'Delete' || e.key === 'Backspace') sell(); });
   $('#reroll').onclick = async () => {
     if (phase !== 'shop') return;
     const btn = $('#reroll'); btn.classList.remove('wob'); void btn.offsetWidth; btn.classList.add('wob');
@@ -847,12 +900,12 @@
       if (lastMv && (!vis || vis[lastMv.t])) { set(lastMv.f, 3, C.last); set(lastMv.t, 3, C.last); }
       if (B.boss === 'hive' && B.hiveAt >= 0 && B.timer === 1) set(B.hiveAt, 3, C.hive);
       if (B.boss === 'tempest' && B.timer === 1) for (const i of edge(B.wind)) set(i, 3, C.wind);
-      if (peek != null) for (const m of peekMoves) set(m.t, m.k ? 3 : 2, C.foe);
-      if (sel != null) { set(sel, 1, C.sel); for (const m of selMoves) { const k = m.k && !hid(m.t); set(m.t, k ? 3 : 2, k ? C.cap : m.d ? C.danger : C.move); } }
+      if (peek != null) for (const m of peekMoves) set(m.t, m.k && m.k !== 5 ? 3 : 2, C.foe);
+      if (sel != null) { set(sel, 1, C.sel); for (const m of selMoves) { const k = m.k && m.k !== 5 && !hid(m.t); set(m.t, k ? 3 : 2, k ? C.cap : m.k === 5 ? C.ice : m.d ? C.danger : C.move); } }
       if (sel == null && phase === 'player' && hover >= 0 && hover < 36) { // threat preview
         const st = B.st, h = hid(hover) ? null : st.b[hover];
-        if (h && h.s === 1) for (const m of R.moves(st, hover)) { const q = st.b[m.t]; if (q && q.s === 0) set(m.t, 3, C.cap); else if (!tileK[m.t]) set(m.t, 2, C.foe); }
-        else if (h && h.s === 0) for (let i = 0; i < 36; i++) { const q = st.b[i]; if (q && q.s === 1 && !hid(i) && R.moves(st, i).some(m => m.k && m.t === hover)) set(i, 3, C.cap); }
+        if (h && h.s === 1) for (const m of R.moves(st, hover)) { if (m.k === 5) continue; const q = st.b[m.t]; if (q && q.s === 0) set(m.t, 3, C.cap); else if (!tileK[m.t]) set(m.t, 2, C.foe); }
+        else if (h && h.s === 0) for (let i = 0; i < 36; i++) { const q = st.b[i]; if (q && q.s === 1 && !hid(i) && R.moves(st, i).some(m => m.k && m.k !== 5 && m.t === hover)) set(i, 3, C.cap); }
       }
       for (const m of B.marks) { // lava goes on top: erupting tiles override, warnings add an outer ring
         if (m.s === 2) set(m.i, 4, C.lava);
@@ -902,6 +955,10 @@
       const st = B.st, vis = B.vis || (B.vis = new Uint8Array(36)); vis.fill(0);
       for (let i = 0; i < 36; i++) { const p = st.b[i]; if (!p || p.s) continue; const x = i % 6, y = (i / 6) | 0;
         for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < 6 && ny < 6) vis[nx + ny * 6] = 1; } }
+      for (let i = 0; i < 36; i++) { // fog never hides the piece that just moved, or anything that can take one of yours
+        const p = st.b[i]; if (!p || p.s !== 1 || p.t === 'K' || vis[i]) continue;
+        if ((lastMv && (lastMv.t === i || lastMv.f === i)) || R.moves(st, i).some(m => m.k && m.k !== 5 && st.b[m.t] && st.b[m.t].s === 0)) vis[i] = 1;
+      }
       for (let i = 0; i < 36; i++) { const p = st.b[i]; if (p && p.s === 1 && p.t !== 'K' && !vis[i]) { const e = ents.get(p.id); if (e) e.fogT = 1; } }
     }
     if (B && B.st.fz) for (let i = 0; i < 36; i++) { const p = B.st.b[i]; if (p && B.st.fz[i] && p.t !== 'K') { const e = ents.get(p.id); if (e) e.iceT = 1; } }
@@ -939,7 +996,7 @@
     for (const e of all) { const sc = Math.max(e.sca, e.fv || 0); if (sc < .995) gfx.draw(e.m, e.bones, { A: tint(e.A, (e.iv || 0) * .7), B: tint(e.B, (e.iv || 0) * .7), flash: e.flash, scatter: sc }); }
     gfx.particles(pdata, np);
     gfx.end({ skyA: cur.skyA, skyB: cur.skyB, time, flash: sflash, gray, fade: 1 });
-    labels(); tip();
+    labels(); tip(); sellBtn();
     if (Q.has('demo') && (demoT -= rdt) < 0) { // self-playing mode for testing
       demoT = .35;
       if (phase === 'title') { splash(null); run.spun ? nextFight() : spin(); }

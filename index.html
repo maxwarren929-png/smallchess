@@ -42,6 +42,9 @@
   button:active { transform: translateY(3px); box-shadow: 0 0 0 4px #120c1c, inset 0 -2px 0 #241b3a; }
   #go { background: #2f7a55; box-shadow: 0 0 0 4px #120c1c, inset 0 -6px 0 #1d5238, inset 0 4px 0 #49a877; padding-left: 34px; padding-right: 34px; }
   #go:hover { background: #3b966a; }
+  #sell { display: none; background: #7a2f3a; box-shadow: 0 0 0 4px #120c1c, inset 0 -6px 0 #4f1c25, inset 0 4px 0 #a8495a; }
+  #sell.on { display: block; animation: slam .25s cubic-bezier(.2, 2.2, .4, 1); }
+  #sell:hover { background: #943948; }
   .price { position: absolute; font-size: 22px; font-weight: 700; transform: translate(-50%, -50%); white-space: nowrap; display: none; }
   .price.no { color: #ff6b5a; }
   .pips { display: block; text-align: center; line-height: 0; margin-bottom: 8px; }
@@ -92,8 +95,8 @@
   .dg i.l { background: #e8dcc0; } .dg i.d { background: #5d8a8e; }
   .dg i.me { background: #ffc83d; box-shadow: inset 0 0 0 3px #120c1c; }
   .dg i.mv::after { content: ''; position: absolute; inset: 5px; background: #35d6f0; box-shadow: 0 0 0 2px #120c1c; }
-  .dg i.cp, .dg i.sh, .dg i.pl, .dg i.ps { box-shadow: inset 0 0 0 3px var(--c); }
-  .cp { --c: #ff4a3d; } .sh { --c: #ffa53d; } .pl { --c: #c46bff; } .ps { --c: #ff6fb0; }
+  .dg i.cp, .dg i.sh, .dg i.pl, .dg i.ps, .dg i.sw { box-shadow: inset 0 0 0 3px var(--c); }
+  .cp { --c: #ff4a3d; } .sh { --c: #ffa53d; } .pl { --c: #c46bff; } .ps { --c: #ff6fb0; } .sw { --c: #6fd0ff; }
   .cx-key { padding: 12px 18px 16px; font-size: 13px; color: #d8cbe8; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 4px solid #120c1c; box-shadow: inset 0 4px 0 #3b2f58; }
   .cx-key i { width: 14px; height: 14px; display: inline-block; margin-left: 12px; background: #e8dcc0; box-shadow: inset 0 0 0 3px var(--c), 0 0 0 2px #120c1c; }
   .cx-key i.mv { background: #35d6f0; box-shadow: 0 0 0 2px #120c1c; width: 8px; height: 8px; }
@@ -103,6 +106,9 @@
   @keyframes blink { 50% { opacity: .35; } }
   @keyframes slam { from { transform: scale(2.4); opacity: 0; } }
   @keyframes out { to { opacity: 0; transform: scale(.9); } }
+#grainTip{position:fixed;left:50%;bottom:14%;transform:translateX(-50%);padding:6px 14px;background:#140c08e0;border:2px solid #c9a24a;color:#f3d98a;font:bold 14px monospace;letter-spacing:2px;pointer-events:none;opacity:0;z-index:50}
+#grainTip.on{animation:gtip 1.6s ease-out forwards}
+@keyframes gtip{0%{opacity:0;transform:translate(-50%,8px)}10%,70%{opacity:1;transform:translate(-50%,0)}100%{opacity:0}}
 </style>
 </head>
 <body>
@@ -113,7 +119,7 @@
   <div id="timer"></div>
   <div id="big"></div>
   <div class="price"></div><div class="price"></div><div class="price"></div><div class="price"></div>
-  <div id="bar"><button id="reroll">&#8635; <i class="coin"></i><span>1</span></button><button id="go">&#9654;</button></div>
+  <div id="bar"><button id="sell" title="Sell selected piece (Del)">&#10005; SELL <i class="coin"></i><span>1</span></button><button id="reroll">&#8635; <i class="coin"></i><span>1</span></button><button id="go">&#9654;</button></div>
   <div id="tip"></div>
   <button id="book" title="Bestiary (B)"><i></i></button>
   <div id="codex"></div>

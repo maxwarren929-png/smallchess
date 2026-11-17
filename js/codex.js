@@ -18,17 +18,19 @@
       if (j === AT) continue;
       const st = mk(); st.b[j] = { id: 2, t: 'P', s: 1 };
       for (const m of R.moves(st, AT)) if (m.t === j && m.k) cells[j] |= m.k === 2 ? 4 : m.k === 3 ? 8 : m.k === 4 ? 16 : 2;
+      const sa = mk(); sa.b[j] = { id: 3, t: 'P', s: 0 }; // and with an ally on it (swaps)
+      for (const m of R.moves(sa, AT)) if (m.t === j && m.k === 5) cells[j] |= 32;
     }
     let h = '<div class="dg">';
     for (let y = 5; y >= 0; y--) for (let x = 0; x < 6; x++) {
       const i = x + y * 6, c = cells[i];
-      h += '<i class="' + ((x + y) % 2 ? 'l' : 'd') + (i === AT ? ' me' : '') + (c & 1 ? ' mv' : '') + (c & 2 ? ' cp' : '') + (c & 4 ? ' sh' : '') + (c & 8 ? ' pl' : '') + (c & 16 ? ' ps' : '') + '"></i>';
+      h += '<i class="' + ((x + y) % 2 ? 'l' : 'd') + (i === AT ? ' me' : '') + (c & 1 ? ' mv' : '') + (c & 2 ? ' cp' : '') + (c & 4 ? ' sh' : '') + (c & 8 ? ' pl' : '') + (c & 16 ? ' ps' : '') + (c & 32 ? ' sw' : '') + '"></i>';
     }
     return h + '</div>';
   }
   const pic = (m, dark) => { try { return G.portrait ? '<img src="' + G.portrait(m, dark) + '" alt="">' : ''; } catch (e) { return ''; } };
 
-  const ORDER = ['P', 'N', 'B', 'R', 'Q', 'K', 'F', 'X', 'G', 'C', 'H', 'M', 'S', 'O'];
+  const ORDER = ['P', 'N', 'B', 'R', 'Q', 'K', 'F', 'X', 'G', 'C', 'H', 'M', 'S', 'O', 'A', 'W', 'V', 'L'];
   let tab = 'p';
   function render() {
     const D = G.data, el = document.getElementById('codex');
@@ -54,7 +56,7 @@
       }
     });
     h += '</div>';
-    if (tab === 'p') h += '<div class="cx-key"><i class="mv"></i>MOVE<i class="cp"></i>TAKE<i class="sh"></i>SHOOT<i class="pl"></i>PULL<i class="ps"></i>SHOVE</div>';
+    if (tab === 'p') h += '<div class="cx-key"><i class="mv"></i>MOVE<i class="cp"></i>TAKE<i class="sh"></i>SHOOT<i class="pl"></i>PULL<i class="ps"></i>SHOVE<i class="sw"></i>SWAP</div>';
     el.innerHTML = '<div class="cx-box">' + h + '</div>';
   }
   function open(v) {
