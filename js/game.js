@@ -53,6 +53,8 @@
   // ------------------------------------------------------------ state
   let phase = 'title', run, B = null, shop = null, choice = null, sel = null, selMoves = [], peek = null, peekMoves = [], hover = -1, lastMv = null, uid = 1;
   let time = 0, tscale = 1, tsReal = 0, shake = 0, punch = 0, sflash = 0, gray = 0, last = 0, demoT = 1;
+  let view = 0, camYaw = 0; // pvp: which side the camera looks from (swings round to face whoever moves)
+  const PVP_GOLD = +(Q.get('pvpg') || 25), PVP_POOL = ['P', 'P', ...Object.keys(PRICE).filter(t => t !== 'P')];
   const ents = new Map(), all = new Set(), shelf = [], MD = {};
   const blastT = new Float32Array(36), tile = new Float32Array(144), tileK = new Float32Array(36), ty = new Float32Array(36), tv = new Float32Array(36), shBuf = new Float32Array(160);
   const envBones = new Float32Array(128), mouse = { x: 0, y: 0, nx: 0, ny: 0 };
@@ -206,7 +208,7 @@
     burst([v.p[0], .45, v.p[2]], v.A, 24, 4.5); burst([v.p[0], .45, v.p[2]], v.B, 14, 5.5);
     shake = Math.max(shake, v.king ? .8 : .35); punch = 1; sflash = Math.max(sflash, .12); sfx.cap();
     if (v.king) { tscale = .2; tsReal = .9; } else hitstop();
-    if (v.side === 1 && B) coins(v.p, 1 + (run.relics.includes('purse') ? 1 : 0));
+    if (v.side === 1 && B && !B.pvp) coins(v.p, 1 + (run.relics.includes('purse') ? 1 : 0));
   }
   function hurt(v) { // a tough piece survives a hit: golems lose an arm and keep shedding dust
     if (!v) return;
@@ -246,11 +248,19 @@
   // ------------------------------------------------------------ hud
   function hud() {
     $('#gold span').textContent = run.gold;
-    $('#track').innerHTML = Array.from({ length: ROUNDS }, (_, i) => `<i class="${i % 3 === 2 ? 'boss ' : ''}${i < run.round ? 'done' : i === run.round ? 'now' : ''}"></i>`).join('');
+    $('#gold').style.display = run.pvp && B ? 'none' : '';
+    $('#pvp').classList.toggle('on', phase === 'title');
     let t = '';
-    if (B && (B.boss === 'tempest' || B.boss === 'chaos' || B.boss === 'hive')) {
-      t = B.boss === 'chaos' ? '?' : B.boss === 'hive' ? '+' : B.wind[0] > 0 ? '&rarr;' : B.wind[0] < 0 ? '&larr;' : B.wind[1] > 0 ? '&uarr;' : '&darr;';
-      t += [2, 1].map(k => `<i class="${B.timer >= k ? '' : 'on'}"></i>`).join('');
+    if (run.pvp) { // whose draft / whose move
+      $('#track').innerHTML = '';
+      const w = B ? B.st.turn : run.who;
+      if (phase !== 'over') t = `<b class="p${w + 1}">P${w + 1} ${B ? 'TO MOVE' : 'DRAFT'}</b>`;
+    } else {
+      $('#track').innerHTML = Array.from({ length: ROUNDS }, (_, i) => `<i class="${i % 3 === 2 ? 'boss ' : ''}${i < run.round ? 'done' : i === run.round ? 'now' : ''}"></i>`).join('');
+      if (B && (B.boss === 'tempest' || B.boss === 'chaos' || B.boss === 'hive')) {
+        t = B.boss === 'chaos' ? '?' : B.boss === 'hive' ? '+' : B.wind[0] > 0 ? '&rarr;' : B.wind[0] < 0 ? '&larr;' : B.wind[1] > 0 ? '&uarr;' : '&darr;';
+        t += [2, 1].map(k => `<i class="${B.timer >= k ? '' : 'on'}"></i>`).join('');
+      }
     }
     $('#timer').innerHTML = t;
     $('#bar').classList.toggle('on', phase === 'shop');
@@ -283,7 +293,7 @@
   }
   function addUnit(t, slot) { const u = { t, slot, id: uid++ }; run.army.push(u); seen(t); return u; }
   function unitEnt(u, pop) {
-    const e = mkEnt(MODEL[u.t], TP(u.slot), { side: 0, yaw: Math.PI, king: u.t === 'K' });
+    const e = mkEnt(MODEL[u.t], TP(u.slot), { side: 0, yaw: Math.PI, king: u.t === 'K', ...(run.pvp && run.who ? { A: EA, B: EB } : {}) });
     ents.set(u.id, e); if (pop) appear(e); return e;
   }
   function newRun() {
@@ -397,6 +407,52 @@
     fr.slice(front, front + pawns).forEach(x => out.push({ t: 'P', i: 24 + x }));
     return out;
   }
+
+  // ------------------------------------------------------------ pvp (hotseat)
+  // Each player blind-drafts an army from the same gold budget (pieces only: relics are wired to side 0 in the rules),
+  // then they fight on one screen. P2's army is rotated 180 degrees onto the far side; the camera swings to face the mover.
+  function pvpStart() {
+    if (phase !== 'title') return;
+    sfx.init(); sfx.click(); splash(null); clearAll();
+    run = { pvp: true, who: 0, gold: 0, round: 0, relics: [], army: [], bosses: [] };
+    pvpDraft(0);
+  }
+  async function pvpDraft(who) {
+    phase = 'anim'; sel = null; view = 0;
+    for (const [id, e] of [...ents]) { ents.delete(id); vanish(e); }
+    if (who) run.p1 = run.army;
+    run.who = who; run.army = []; run.gold = PVP_GOLD;
+    theme = TH[who ? 'a2' : 'a0']; hud();
+    splash('PLAYER ' + (who + 1), 'flash', who ? 'P1, no peeking' : 'draft your army'); sfx.boss();
+    await wait(1.5);
+    addUnit('K', 2); enterShop();
+  }
+  async function pvpBattle() {
+    phase = 'anim'; sel = peek = lastMv = null; selMoves = []; view = 0;
+    const p2 = run.army;
+    for (const [id, e] of [...ents]) { ents.delete(id); vanish(e); }
+    theme = TH.a1;
+    const st = R.state();
+    B = { st, pvp: true, boss: null, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: 2, bonus: 0 };
+    hud(); await wait(.4);
+    for (const [s, army] of [[0, run.p1], [1, p2]]) for (const u of army) {
+      const i = s ? 35 - u.slot : u.slot, id = uid++;
+      st.b[i] = { id, t: u.t, s, hp: R.hpOf(u.t) };
+      const e = mkEnt(MODEL[u.t], TP(i), { side: s, yaw: s ? 0 : Math.PI, A: s ? EA : PA, B: s ? EB : PB, king: u.t === 'K' });
+      ents.set(id, e); appear(e); sfx.pop(); tv[i] -= 1; await wait(.05);
+    }
+    await wait(.3); splash('FIGHT', 'flash'); sfx.boss(); shake = .4; await wait(.9);
+    phase = 'player'; hud();
+  }
+  async function pvpNext() {
+    const st = B.st;
+    if (!R.all(st, st.turn).length) { // nothing can move: skip the turn; both stuck is a draw
+      R.pass(st);
+      if (!R.all(st, st.turn).length) { phase = 'over'; hud(); splash('DRAW', 'show', '&#9654;'); return; }
+    }
+    await wait(.2); view = st.turn; hud(); phase = 'player';
+  }
+  $('#pvp').onclick = pvpStart;
 
   // ------------------------------------------------------------ pick your fight
   // Before each normal fight: three armies on pedestals, easy / medium / hard. Hover previews the lineup.
@@ -566,7 +622,8 @@
     const st = B.st, id = st.b[i].id; sel = i; peek = null; selMoves = R.moves(st, i);
     for (const m of selMoves) { // flag moves that leave the piece hanging
       const c = R.clone(st); R.apply(c, m, null); m.d = false;
-      if (c.w < 0 && c.turn === 1) { const j = c.b.findIndex(p => p && p.id === id); if (j >= 0) m.d = R.all(c, 1).some(x => x.t === j && x.k > 0); }
+      const foe = 1 - st.turn;
+      if (c.w < 0 && c.turn === foe) { const j = c.b.findIndex(p => p && p.id === id); if (j >= 0) m.d = R.all(c, foe).some(x => x.t === j && x.k > 0); }
     }
     const e = ents.get(id); if (e) { e.sqv += 5; e.wob = 1; }
     sfx.sel();
@@ -577,6 +634,7 @@
     const st = B.st, ev = []; deselect(); peek = null; lastMv = null; phase = 'anim';
     R.apply(st, m, ev); await play(ev);
     if (await checkEnd()) return;
+    if (B.pvp) return pvpNext();
     if (st.turn === 0) { // fury: the same piece goes again
       const i = st.b.findIndex(p => p && p.id === st.again);
       if (i >= 0 && R.moves(st, i).length) { flashRelic('frenzy'); phase = 'player'; select(i); return; }
@@ -601,7 +659,13 @@
   }
   async function checkEnd() {
     const st = B.st; if (st.w < 0) return false;
-    await wait(.5); if (st.w === 0) await win(); else await lose();
+    await wait(.5);
+    if (B.pvp) {
+      sfx.win(); view = st.w; phase = 'over'; hud();
+      splash('PLAYER ' + (st.w + 1), 'show', 'wins &#9654;'); confetti(160); wait(.4).then(() => confetti(120));
+      return true;
+    }
+    if (st.w === 0) await win(); else await lose();
     return true;
   }
 
@@ -709,7 +773,7 @@
       if (e.m !== MODEL[u.t]) morph(e, MODEL[u.t]);
       hop(e, TP(u.slot), .35, .5).then(() => land(e, u.slot));
     }
-    shop = { offers: [], reroll: run.relics.includes('clover') ? 0 : 1 }; roll();
+    shop = { offers: [], reroll: run.relics.includes('clover') ? 0 : 1 }; roll(); hud();
     await wait(.5); phase = 'shop'; hud();
   }
   // --- pedestal juice: pedestals rise out of the board, items drop onto them; leaving, items get sucked down
@@ -749,7 +813,8 @@
     const pool = [['P', 'P', 'N', 'B', 'F', 'S', 'M', 'A'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H', 'A', 'W', 'L'], ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W'],
       ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W', 'A']][act];
     const rel = Object.keys(RELICS).filter(k => !run.relics.includes(k)).sort(() => rand() - .5);
-    const offs = [{ t: pick(pool) }, { t: pick(pool) }, rel.length > 1 && rand() < .5 ? { rel: rel[1] } : { t: pick(REELS[0]) }, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
+    const offs = run.pvp ? [0, 1, 2, 3].map(() => ({ t: pick(PVP_POOL) }))
+      : [{ t: pick(pool) }, { t: pick(pool) }, rel.length > 1 && rand() < .5 ? { rel: rel[1] } : { t: pick(REELS[0]) }, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
     shop.offers = offs.map((o, k) => {
       const i = 19 + k, p = TP(i), ped = mkEnt('ped', p, {}), item = mkEnt(o.rel || MODEL[o.t], p, { lift: .5, spin: 1.2, sc: .85, bob: .05 });
       raise(ped, item, k * .09, i);
@@ -789,7 +854,7 @@
       tw(.32, k => e.lift = .5 + Math.sin(k * 3.14) * .55).then(() => {
         e.spin = 0;
         if (o.t) {
-          Object.assign(e, { bob: 0, side: 0 }); tw(.4, k => { e.lift = .5 * (1 - k); e.sc = lerp(.85, 1, k); e.yaw = lerp(e.yaw % 6.2832, Math.PI, k); });
+          Object.assign(e, { bob: 0, side: 0 }, run.pvp && run.who ? { A: EA, B: EB } : {}); tw(.4, k => { e.lift = .5 * (1 - k); e.sc = lerp(.85, 1, k); e.yaw = lerp(e.yaw % 6.2832, Math.PI, k); });
           hop(e, TP(slot), .45, 1.1).then(() => land(e, slot));
         } else {
           all.delete(e); const s = addRelic(o.rel); if (o.rel === 'coupon') shop && shop.offers.forEach(q => { if (!q.sold) q.price = Math.max(1, q.price - 1); }); s.sca = 0; const to = s.p.slice(); s.p[0] = e.p[0]; s.p[1] = .5; s.p[2] = e.p[2];
@@ -813,7 +878,9 @@
     if (phase !== 'shop') return;
     if (sel != null) { const u = run.army.find(u => u.slot === sel); if (u) ents.get(u.id).wob = 0; sel = null; }
     for (const o of shop.offers) if (!o.sold) { o.busy = true; suck(o.item); wait(.15).then(() => sink(o.ped)); }
-    shop = null; run.round++; sfx.click(); nextFight(); hud();
+    shop = null; sfx.click();
+    if (run.pvp) return run.who ? pvpBattle() : pvpDraft(1);
+    run.round++; nextFight(); hud();
   }
   $('#go').onclick = go;
   $('#sell').onclick = sell;
@@ -866,7 +933,7 @@
     if (st.again != null) { deselect(); R.pass(st); return enemyTurn(); } // decline the fury move
     const p = i >= 0 && st.b[i];
     deselect(); peek = null;
-    if (p && p.s === 0) select(i);
+    if (p && p.s === st.turn) select(i);
     else if (p && !(B.vis && !B.vis[i] && p.t !== 'K')) { peek = i; peekMoves = R.moves(st, i); sfx.sel(); }
   }
   function setMouse(e) {
@@ -879,7 +946,7 @@
   cv.addEventListener('pointermove', setMouse);
   cv.addEventListener('pointerdown', e => {
     sfx.init(); setMouse(e);
-    if (phase === 'title') { splash(null); sfx.click(); return run.spun ? nextFight() : spin(); }
+    if (phase === 'title') { splash(null); sfx.click(); $('#pvp').classList.remove('on'); return run.spun ? nextFight() : spin(); }
     if (phase === 'lever') return leverGo && leverGo();
     if (phase === 'over') { sfx.click(); return newRun(); }
     downTile = hover; click(hover);
@@ -900,7 +967,7 @@
     if (B && B.st.fz && B.st.fz[i] && p.t !== 'K') tags.push('<em class="ice">FROZEN</em>');
     if (p.hp > 1) tags.push('<em>' + p.hp + ' HP</em>');
     if (p.kills) tags.push('<em>+' + p.kills + ' RANGE</em>');
-    return [(p.s ? '<s>FOE</s> ' : '') + name, desc + (tags.length ? '<br>' + tags.join(' ') : '')];
+    return [(B && B.pvp ? '<s>P' + (p.s + 1) + '</s> ' : p.s ? '<s>FOE</s> ' : '') + name, desc + (tags.length ? '<br>' + tags.join(' ') : '')];
   }
   function tip() {
     const el = $('#tip'); let t = null;
@@ -930,9 +997,9 @@
       if (peek != null) for (const m of peekMoves) set(m.t, m.k && m.k !== 5 ? 3 : 2, C.foe);
       if (sel != null) { set(sel, 1, C.sel); for (const m of selMoves) { const k = m.k && m.k !== 5 && !hid(m.t); set(m.t, k ? 3 : 2, k ? C.cap : m.k === 5 ? C.ice : m.d ? C.danger : C.move); } }
       if (sel == null && phase === 'player' && hover >= 0 && hover < 36) { // threat preview
-        const st = B.st, h = hid(hover) ? null : st.b[hover];
-        if (h && h.s === 1) for (const m of R.moves(st, hover)) { if (m.k === 5) continue; const q = st.b[m.t]; if (q && q.s === 0) set(m.t, 3, C.cap); else if (!tileK[m.t]) set(m.t, 2, C.foe); }
-        else if (h && h.s === 0) for (let i = 0; i < 36; i++) { const q = st.b[i]; if (q && q.s === 1 && !hid(i) && R.moves(st, i).some(m => m.k && m.k !== 5 && m.t === hover)) set(i, 3, C.cap); }
+        const st = B.st, h = hid(hover) ? null : st.b[hover], me = st.turn;
+        if (h && h.s !== me) for (const m of R.moves(st, hover)) { if (m.k === 5) continue; const q = st.b[m.t]; if (q && q.s === me) set(m.t, 3, C.cap); else if (!tileK[m.t]) set(m.t, 2, C.foe); }
+        else if (h && h.s === me) for (let i = 0; i < 36; i++) { const q = st.b[i]; if (q && q.s !== me && !hid(i) && R.moves(st, i).some(m => m.k && m.k !== 5 && m.t === hover)) set(i, 3, C.cap); }
       }
       for (const m of B.marks) { // lava goes on top: erupting tiles override, warnings add an outer ring
         if (m.s === 2) set(m.i, 4, C.lava);
@@ -1009,7 +1076,9 @@
     for (const k in cur) for (let i = 0; i < 3; i++) cur[k][i] += (theme[k][i] - cur[k][i]) * Math.min(1, rdt * 2.5);
     shake *= Math.exp(-rdt * 8); punch *= Math.exp(-rdt * 7); sflash *= Math.exp(-rdt * 9);
     const cam = gfx.cam, kz = Math.max(1, 1.5 / cam.aspect) * (1 - punch * .035);
-    cam.pos = [mouse.nx * .4 + rand(-1, 1) * shake * .4, 8.6 * kz + rand(-1, 1) * shake * .4, 7.4 * kz]; cam.tgt = [mouse.nx * .1, .3, .1];
+    camYaw += ((B && B.pvp ? view * Math.PI : 0) - camYaw) * Math.min(1, rdt * 4);
+    const cy = Math.cos(camYaw), sy = Math.sin(camYaw), rot = ([x, y, z]) => [x * cy + z * sy, y, z * cy - x * sy];
+    cam.pos = rot([mouse.nx * .4 + rand(-1, 1) * shake * .4, 8.6 * kz + rand(-1, 1) * shake * .4, 7.4 * kz]); cam.tgt = rot([mouse.nx * .1, .3, .1]);
     for (let i = 0; i < 36; i++) { tv[i] += (-ty[i] * 320 - tv[i] * 13) * dt; ty[i] = clamp(ty[i] + tv[i] * dt, -.25, .2); }
     ambient(dt);
     for (let i = 0; i < 36; i++) blastT[i] = Math.max(0, blastT[i] - rdt * 1.4);
