@@ -2,7 +2,7 @@
 (function (G) {
   'use strict';
   const W = 6, H = 6, N = 36;
-  const VAL = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 1000, F: 3, X: 3, G: 4, C: 5, H: 4, M: 3, S: 3, O: 4, A: 3, W: 3, V: 4, L: 4 };
+  const VAL = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 1000, F: 3, X: 3, G: 4, C: 5, H: 5, M: 3, S: 3, O: 4, A: 3, W: 3, V: 4, L: 4 };
   // hit points: golems take an extra hit
   const hpOf = t => t === 'O' ? 2 : 1;
   const D8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
@@ -13,11 +13,11 @@
   const clone = st => ({ b: st.b.slice(), f: { ...st.f }, turn: st.turn, again: st.again, w: st.w, doom: st.doom, nid: st.nid, fz: st.fz });
 
   // move: {f, t, k}  k: 0 move, 1 capture, 2 ranged shot (shooter stays), 3 hook pull, 4 ram push, 5 swap with an ally
-  // p.hp = hits left (golem)
+  // p.hp = hits left (golem), p.dz = stunned by a hook (skips its side's next turn)
   function moves(st, i, out = []) {
     const p = st.b[i]; if (!p) return out;
-    if (st.fz && st.fz[i] && p.t !== 'K') return out; // frozen in place (frost boss)
-    const x = i % W, y = (i / W) | 0, s = p.s, b = st.b;
+    if (p.t !== 'K' && ((st.fz && st.fz[i]) || p.dz)) return out; // frozen in place (frost boss) or stunned (hook)
+    const x = i % W, y = (i / W) | 0, s = p.s, b = st.b, n0 = out.length;
     const step = (dx, dy, mode) => { // mode 0 both, 1 move only, 2 capture only
       const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) return;
       const j = nx + ny * W, q = b[j];
@@ -49,9 +49,9 @@
       case 'F': for (const d of D8) step(d[0] * 2, d[1] * 2, 0); for (const d of ORTH) step(d[0], d[1], 1); break;
       case 'X': for (const d of D8) step(d[0], d[1], 0); break;
       case 'G': slide(DIAG, 2, true); break;
-      case 'C': case 'H': { // cannon shoots the first piece in a line; hook pulls it next to itself
+      case 'C': case 'H': { // cannon shoots the first piece in a line; hook pulls it next to itself (and can bite adjacent foes)
         const hook = p.t === 'H', rng = (hook ? 4 : 3) + (!s && st.f.scope ? 3 : 0);
-        for (const d of ORTH) step(d[0], d[1], 1);
+        for (const d of ORTH) step(d[0], d[1], hook ? 0 : 1);
         for (const [dx, dy] of ORTH) {
           let nx = x + dx, ny = y + dy, r = 0;
           while (r < rng && nx >= 0 && ny >= 0 && nx < W && ny < H) {
@@ -92,6 +92,10 @@
         break;
       case 'V': slide(D8, 1 + (p.kills || 0)); break; // vampire: every kill adds a tile of reach (see apply), up to 4
       case 'L': slide(ORTH, 3, true); break; // lancer: charges 3 straight, leaping blockers
+    }
+    if (st.again === p.id) { // fury's bonus move is a reposition only: no attacks
+      let w = n0; for (let k = n0; k < out.length; k++) if (out[k].k === 0 || out[k].k === 5) out[w++] = out[k];
+      out.length = w;
     }
     return out;
   }
@@ -142,7 +146,11 @@
       }
     }
   }
-  const end = st => { st.again = null; st.turn ^= 1; };
+  // end of a side's turn: its stunned pieces recover, then the other side moves
+  const end = st => {
+    for (let i = 0; i < N; i++) { const p = st.b[i]; if (p && p.dz && p.s === st.turn) st.b[i] = { ...p, dz: 0 }; }
+    st.again = null; st.turn ^= 1;
+  };
 
   function apply(st, m, ev) {
     const p = st.b[m.f], boomQ = [];
@@ -150,10 +158,11 @@
     if (m.k === 2) {
       ev && ev.push({ e: 'shoot', id: p.id, f: m.f, t: m.t });
       cap = kill(st, m.t, ev, m.f, boomQ);
-    } else if (m.k === 3) { // hook: drag the target to the tile next to the hook
+    } else if (m.k === 3) { // hook: drag the target to the tile next to the hook; it's stunned for a turn (kings shrug it off)
       const q = st.b[m.t], fx = m.f % W, fy = (m.f / W) | 0, dx = Math.sign((m.t % W) - fx), dy = Math.sign(((m.t / W) | 0) - fy), to = fx + dx + (fy + dy) * W;
-      st.b[m.t] = null; st.b[to] = q;
-      ev && ev.push({ e: 'pull', id: p.id, tid: q.id, f: m.t, t: to });
+      const dz = q.t !== 'K';
+      st.b[m.t] = null; st.b[to] = dz ? { ...q, dz: 1 } : q;
+      ev && ev.push({ e: 'pull', id: p.id, tid: q.id, f: m.t, t: to, dz });
     } else if (m.k === 5) { // mage: trade places with an ally
       const q = st.b[m.t]; st.b[m.t] = p; st.b[m.f] = q;
       ev && ev.push({ e: 'swap', id: p.id, tid: q.id, f: m.f, t: m.t });
@@ -221,7 +230,7 @@
     if (st.w >= 0) return st.w === st.turn ? 5000 + d : -5000 - d;
     if (d <= 0) return evalS(st, st.turn);
     const ms = all(st, st.turn);
-    if (!ms.length) { const c = clone(st); c.again = null; c.turn ^= 1; return -search(c, d - 1, -be, -al); }
+    if (!ms.length) { const c = clone(st); end(c); return -search(c, d - 1, -be, -al); }
     order(st, ms);
     let best = -1e9;
     for (const m of ms) {
@@ -243,5 +252,5 @@
     return bm;
   }
 
-  G.R = { W, H, N, VAL, hpOf, state, clone, moves, all, apply, kill, booms, best };
+  G.R = { W, H, N, VAL, hpOf, state, clone, moves, all, apply, kill, booms, best, pass: end };
 })(typeof window !== 'undefined' ? (window.CL = window.CL || {}) : (globalThis.CL = globalThis.CL || {}));

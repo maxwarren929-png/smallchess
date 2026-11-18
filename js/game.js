@@ -17,11 +17,11 @@
   const NAMES = {
     P: ['PAWN', 'steps up, takes diagonally'], N: ['KNIGHT', 'jumps in an L'], B: ['BISHOP', 'slides diagonally'], R: ['ROOK', 'slides straight'], Q: ['QUEEN', 'slides any way'], K: ['KING', 'lose it, lose the fight'],
     F: ['FROG', 'leaps 2'], X: ['BOMB', 'explodes 3x3'], G: ['GHOST', 'phases 2 diagonally'], C: ['CANNON', 'shoots 3'],
-    H: ['HOOK', 'pulls a foe in'], M: ['RAM', 'shoves, crushes'], S: ['SLIME', 'splits into 2 pawns'], O: ['GOLEM', 'takes 2 hits'],
+    H: ['HOOK', 'pulls a foe in, stuns it'], M: ['RAM', 'shoves, crushes'], S: ['SLIME', 'splits into 2 pawns'], O: ['GOLEM', 'takes 2 hits'],
     A: ['ARCHER', 'shoots 2 diagonally'], W: ['MAGE', 'swaps with an ally'], V: ['VAMPIRE', 'each kill: +1 range'], L: ['LANCER', 'charges 3, leaps'],
   };
   const RELICS = {
-    shield: [9, 'AEGIS', 'blocks 1 capture'], frenzy: [12, 'FURY', 'capture = go again'], crown: [8, 'CROWN', 'king strides 2'], wings: [6, 'WINGS', 'pawns sidestep'],
+    shield: [9, 'AEGIS', 'blocks 1 capture'], frenzy: [12, 'FURY', 'capture = free move after'], crown: [8, 'CROWN', 'king strides 2'], wings: [6, 'WINGS', 'pawns sidestep'],
     purse: [7, 'PURSE', '+1 per capture'], bolt: [8, 'BOLT', 'smites a foe'], egg: [6, 'EGG', 'free pawn'], thorns: [8, 'THORNS', 'pawns bite back'],
     heart: [12, 'HEART', 'king takes 2 hits'], boots: [6, 'BOOTS', 'lava-proof'], anchor: [6, 'ANCHOR', 'wind-proof'], piggy: [8, 'PIGGY', '+1 per 5 saved'],
     clover: [6, 'CLOVER', 'free reroll'], fuse: [9, 'FUSE', 'bigger bomb blasts'], scope: [7, 'SCOPE', 'cannon, hook +3 range'], horn: [7, 'HORN', 'pawns start ahead'],
@@ -29,6 +29,8 @@
     scythe: [9, 'SCYTHE', 'reaps 2 foe pawns'], medal: [7, 'MEDAL', 'pawns promote a row early'],
   };
   const BOSS = ['inferno', 'tempest', 'chaos', 'hive', 'frost', 'eclipse'];
+  const BOSSDESC = { inferno: 'lava erupts on marked tiles', tempest: 'wind shoves everything every 2 turns', chaos: 'pieces mutate every 2 turns',
+    hive: 'lays a pawn every 2 turns', frost: 'marked tiles freeze pieces', eclipse: 'fog hides far-off foes' };
   const ACTS = 4, ROUNDS = ACTS * 3; // every act: two fights, then a boss
   CL.data = { NAMES, PRICE, RELICS, MODEL };
   const seen = t => CL.codex && CL.codex.seen(t), seenRel = k => CL.codex && CL.codex.seenRel(k);
@@ -227,6 +229,10 @@
     sfx.shield(); sflash = Math.max(sflash, .15);
     for (let i = 0; i < 40; i++) { const a = i / 40 * 6.28; spark(p[0] + Math.cos(a) * .45, .5 + Math.sin(a * 3) * .3, p[2] + Math.sin(a) * .45, Math.cos(a) * 2, 1, Math.sin(a) * 2, [.5, .8, 1], .09, .6, { g: 0, drag: 3 }); }
   }
+  function stunFx(v) { // yanked piece sees stars
+    sfx.stun(); v.flash = 1; v.sqv -= 10; v.wob = 1; setTimeout(() => v.wob = 0, 300); shake = Math.max(shake, .25); punch = Math.max(punch, .6);
+    for (let k = 0; k < 14; k++) { const a = k / 14 * 6.28; spark(v.p[0] + Math.cos(a) * .2, 1.05, v.p[2] + Math.sin(a) * .2, Math.cos(a) * 2.2, rand(.5, 1.5), Math.sin(a) * 2.2, [1, .9, .3], .08, .45, { g: 3, drag: 2 }); }
+  }
   function boltFx(p) {
     sfx.bolt(); sflash = .6; shake = Math.max(shake, .5);
     let x = p[0], z = p[2];
@@ -244,7 +250,7 @@
     let t = '';
     if (B && (B.boss === 'tempest' || B.boss === 'chaos' || B.boss === 'hive')) {
       t = B.boss === 'chaos' ? '?' : B.boss === 'hive' ? '+' : B.wind[0] > 0 ? '&rarr;' : B.wind[0] < 0 ? '&larr;' : B.wind[1] > 0 ? '&uarr;' : '&darr;';
-      t += [2, 1].map(k => `<i class="${B.timer >= k ? '' : 'on'}"></i>`).join('') + '<i></i>'.repeat(0);
+      t += [2, 1].map(k => `<i class="${B.timer >= k ? '' : 'on'}"></i>`).join('');
     }
     $('#timer').innerHTML = t;
     $('#bar').classList.toggle('on', phase === 'shop');
@@ -446,7 +452,7 @@
       ents.set(id, e); appear(e); sfx.pop(); tv[f.i] -= 1; await wait(.06);
     }
     await wait(.3);
-    if (boss) { splash(boss.toUpperCase(), 'flash'); sfx.boss(); shake = .6; await wait(1.2); }
+    if (boss) { splash(boss.toUpperCase(), 'flash', BOSSDESC[boss]); sfx.boss(); shake = .6; await wait(1.4); }
     if (has('egg')) {
       const i = [8, 9, 7, 10, 6, 11, 2, 3, 1, 4, 0, 5].find(i => !st.b[i]);
       if (i !== undefined) { const id = uid++; st.b[i] = { id, t: 'P', s: 0 }; const e = mkEnt('pawn', TP(i), { side: 0, yaw: Math.PI }); ents.set(id, e); appear(e); sfx.pop(); flashRelic('egg'); await wait(.3); }
@@ -513,7 +519,7 @@
             for (let k = 0; k <= n; k++) { const q = k / n; spark(lerp(h[0], tx, q), lerp(.78, .45, q) + Math.sin(q * 3.14) * .08, lerp(h[2], tz, q), 0, 0, 0, k % 2 ? [.42, .42, .5] : [.86, .86, .95], k % 2 ? .045 : .065, .065, { g: 0, drag: 0 }); }
           };
           await tw(.15, k => links(lerp(h[0], a0[0], k), lerp(h[2], a0[2], k)));
-          if (v) { v.flash = .7; v.sqv += 6; sfx.chain(); const pr = hop(v, b, .3, .12); await tw(.3, () => links(v.p[0], v.p[2])); await pr; land(v, e.t); }
+          if (v) { v.flash = .7; v.sqv += 6; sfx.chain(); const pr = hop(v, b, .3, .12); await tw(.3, () => links(v.p[0], v.p[2])); await pr; land(v, e.t); if (e.dz) stunFx(v); }
           en.sqv += 5; unaim(en, y0); break;
         }
         case 'ram': { // lunge; the target slides away if it has room
@@ -574,7 +580,7 @@
     if (st.turn === 0) { // fury: the same piece goes again
       const i = st.b.findIndex(p => p && p.id === st.again);
       if (i >= 0 && R.moves(st, i).length) { flashRelic('frenzy'); phase = 'player'; select(i); return; }
-      st.again = null; st.turn = 1;
+      R.pass(st);
     }
     await enemyTurn();
   }
@@ -582,12 +588,12 @@
     const st = B.st; phase = 'anim';
     await wait(.22);
     const m = R.best(st, 3);
-    if (m) { const ev = []; R.apply(st, m, ev); lastMv = m; await play(ev); } else st.turn = 0;
+    if (m) { const ev = []; R.apply(st, m, ev); lastMv = m; await play(ev); } else R.pass(st);
     if (await checkEnd()) return;
     await bossTick();
     if (await checkEnd()) return;
-    if (!R.all(st, 0).length) {
-      st.turn = 1;
+    if (!R.all(st, 0).length) { // nothing can move (all stuck/frozen): skip the turn
+      R.pass(st);
       if (guard > 3 || !R.all(st, 1).length) { st.w = 1; return checkEnd(); }
       return enemyTurn(guard + 1);
     }
@@ -811,7 +817,14 @@
   }
   $('#go').onclick = go;
   $('#sell').onclick = sell;
-  addEventListener('keydown', e => { if (e.key === 'Delete' || e.key === 'Backspace') sell(); });
+  addEventListener('keydown', e => {
+    if (e.key === 'Delete' || e.key === 'Backspace') sell();
+    if (e.key === 'Escape' && sel != null) {
+      if (phase === 'player') { deselect(); sfx.click(); }
+      else if (phase === 'shop') { const u = run.army.find(u => u.slot === sel), en = u && ents.get(u.id); if (en) en.wob = 0; sel = null; sfx.click(); }
+    }
+    if (e.key === 'Enter' && phase === 'shop' && !document.getElementById('codex').classList.contains('on')) go();
+  });
   $('#reroll').onclick = async () => {
     if (phase !== 'shop') return;
     const btn = $('#reroll'); btn.classList.remove('wob'); void btn.offsetWidth; btn.classList.add('wob');
@@ -850,7 +863,7 @@
     if (phase !== 'player') return;
     const st = B.st, m = sel != null && selMoves.find(m => m.t === i);
     if (m) return playerMove(m);
-    if (st.again != null) { deselect(); st.again = null; st.turn = 1; return enemyTurn(); } // decline the fury move
+    if (st.again != null) { deselect(); R.pass(st); return enemyTurn(); } // decline the fury move
     const p = i >= 0 && st.b[i];
     deselect(); peek = null;
     if (p && p.s === 0) select(i);
@@ -876,6 +889,19 @@
     if (hover < 0 || hover === downTile || sel == null) return;
     if ((phase === 'player' && selMoves.some(m => m.t === hover)) || (phase === 'shop' && hover < 12)) click(hover);
   });
+  function pieceTip(i) { // name, what it does, and anything special about this one
+    let p;
+    if (B) { p = B.st.b[i]; if (p && B.vis && !B.vis[i] && p.s === 1 && p.t !== 'K') return null; }
+    else { const u = run.army.find(u => u.slot === i); p = u && { t: u.t, s: 0 }; }
+    if (!p) return null;
+    const boss = B && B.boss && p.s === 1 && p.t === 'K';
+    const [name, desc] = boss ? [B.boss.toUpperCase(), BOSSDESC[B.boss]] : NAMES[p.t], tags = [];
+    if (p.dz && p.t !== 'K') tags.push('<em class="stun">STUNNED</em>');
+    if (B && B.st.fz && B.st.fz[i] && p.t !== 'K') tags.push('<em class="ice">FROZEN</em>');
+    if (p.hp > 1) tags.push('<em>' + p.hp + ' HP</em>');
+    if (p.kills) tags.push('<em>+' + p.kills + ' RANGE</em>');
+    return [(p.s ? '<s>FOE</s> ' : '') + name, desc + (tags.length ? '<br>' + tags.join(' ') : '')];
+  }
   function tip() {
     const el = $('#tip'); let t = null;
     if (choice && phase === 'choose' && hover >= 100) {
@@ -885,6 +911,7 @@
       const r = gfx.ray(mouse.nx, mouse.ny);
       for (const s of shelf) if (rayDist(r, [s.e.p[0], s.e.p[1] + .3, s.e.p[2]]) < .4) t = RELICS[s.k].slice(1);
       const o = shop && shop.offers.find(o => o.i === hover && !o.sold); if (o) t = o.rel ? RELICS[o.rel].slice(1) : NAMES[o.t];
+      if (!t && hover >= 0 && hover < 36) t = pieceTip(hover);
     }
     if (!t) { el.style.display = 'none'; return; }
     el.style.display = 'block'; el.style.left = mouse.x + 'px'; el.style.top = mouse.y + 'px'; el.innerHTML = '<b>' + t[0] + '</b>' + (t[1] || '');
@@ -938,6 +965,11 @@
     for (const m of B.marks) if (rand() < dt * (m.s === 2 ? 14 : 4)) { const p = TP(m.i); spark(p[0] + rand(-.4, .4), .05, p[2] + rand(-.4, .4), 0, rand(.8, 2), 0, [1, rand(.4, .8), .1], .06, rand(.4, .9), { g: -1 }); }
     if (B.boss === 'tempest' && rand() < dt * (B.timer === 1 ? 50 : 14)) {
       const [dx, dy] = B.wind; spark(rand(-4, 4) - dx * 4, rand(.2, 1.8), rand(-4, 4) + dy * 4, dx * rand(4, 7), 0, -dy * rand(4, 7), [.8, 1, 1], .05, rand(.8, 1.6), { g: 0, drag: 0 });
+    }
+    for (let i = 0; i < 36; i++) { // stunned pieces: a ring of stars circling the head
+      const p = B.st.b[i], e = p && p.dz && ents.get(p.id); if (!e || e.fv > .5 || rand() > dt * 26) continue;
+      const a = time * 7 + rand(.3) + (rand() < .5 ? 0 : 3.14);
+      spark(e.p[0] + Math.cos(a) * .24, .95 * e.sc + e.lift, e.p[2] + Math.sin(a) * .24, -Math.sin(a) * 1.4, .1, Math.cos(a) * 1.4, rand() < .5 ? [1, .92, .35] : [1, 1, .85], .055, .22, { g: 0, drag: 0 });
     }
     for (const e of all) if (e.hurt && !e.rag && e.sca < .1 && rand() < dt * 4) spark(e.p[0] + rand(-.2, .2), rand(.3, .7), e.p[2] + rand(-.2, .2), 0, 0, 0, [.6, .57, .52], .04, .7, { g: 3 }); // cracked pieces shed dust
     for (const e of all) if (e.m === 'bomb' && !e.rag && e.sca < .1 && rand() < dt * (bombNear(e) ? 45 : 12)) spark(e.p[0] + .07, e.p[1] + .82 * e.sq, e.p[2], rand(-.5, .5), rand(.5, 1.5), rand(-.5, .5), [1, rand(.5, .9), .2], .04, .3, { g: 2 });
