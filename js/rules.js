@@ -51,8 +51,8 @@
       case 'X': for (const d of D8) step(d[0], d[1], 0); break;
       case 'G': slide(DIAG, 2, true); break;
       case 'C': case 'H': { // cannon shoots the first piece in a line; hook pulls it next to itself (and can bite adjacent foes)
-        const hook = p.t === 'H', rng = (hook ? 4 : 3) + (st.f[s].scope ? 3 : 0);
-        for (const d of ORTH) step(d[0], d[1], hook ? 0 : 1);
+        const hook = p.t === 'H', rng = (hook ? 5 : 3) + (st.f[s].scope ? 3 : 0);
+        for (const d of hook ? D8 : ORTH) step(d[0], d[1], hook ? 0 : 1); // hook steps/bites any way, cannon only walks straight
         for (const [dx, dy] of ORTH) {
           let nx = x + dx, ny = y + dy, r = 0;
           while (r < rng && nx >= 0 && ny >= 0 && nx < W && ny < H) {
@@ -63,8 +63,8 @@
         }
         break;
       }
-      case 'M': // ram: walks, and shoves an adjacent enemy one tile (crushing it against walls/pieces)
-        for (const [dx, dy] of ORTH) {
+      case 'M': // ram: walks, and shoves an adjacent enemy one tile, diagonals too (crushing it against walls/pieces)
+        for (const [dx, dy] of D8) {
           const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
           const j = nx + ny * W, q = b[j];
           if (!q) out.push({ f: i, t: j, k: 0 }); else if (q.s !== s) out.push({ f: i, t: j, k: 4 });

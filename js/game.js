@@ -30,7 +30,7 @@
   };
   const BOSS = ['inferno', 'tempest', 'chaos', 'hive', 'frost', 'eclipse'];
   const BOSSDESC = { inferno: 'lava erupts on marked tiles', tempest: 'wind shoves everything every 2 turns', chaos: 'pieces mutate every 2 turns',
-    hive: 'lays a pawn every 2 turns', frost: 'marked tiles freeze pieces', eclipse: 'fog hides far-off foes' };
+    hive: 'lays a pawn every 4 turns', frost: 'marked tiles freeze pieces', eclipse: 'fog hides far-off foes' };
   const ACTS = 4, ROUNDS = ACTS * 3; // every act: two fights, then a boss
   CL.data = { NAMES, PRICE, RELICS, MODEL };
   const seen = t => CL.codex && CL.codex.seen(t), seenRel = k => CL.codex && CL.codex.seenRel(k);
@@ -57,7 +57,7 @@
   let view = 0, camYaw = 0; // pvp: which side the camera looks from (swings round to face whoever moves)
   // pvp: starting budget, round wins needed, gold both players get between rounds (+ a catch-up bonus for the round's loser)
   const PVP_GOLD = +(Q.get('pvpg') || 25), PVP_WINS = +(Q.get('pvpw') || 3), PVP_INCOME = 8, PVP_CATCHUP = 3;
-  const PVP_POOL = ['P', 'P', ...Object.keys(PRICE).filter(t => t !== 'P')];
+  const PVP_POOL = ['P', 'P', ...Object.keys(PRICE).filter(t => t !== 'P' && t !== 'Q')];
   const ents = new Map(), all = new Set(), shelf = [], MD = {};
   const blastT = new Float32Array(36), tile = new Float32Array(144), tileK = new Float32Array(36), ty = new Float32Array(36), tv = new Float32Array(36), shBuf = new Float32Array(160);
   const envBones = new Float32Array(128), mouse = { x: 0, y: 0, nx: 0, ny: 0 };
@@ -263,7 +263,7 @@
       $('#track').innerHTML = Array.from({ length: ROUNDS }, (_, i) => `<i class="${i % 3 === 2 ? 'boss ' : ''}${i < run.round ? 'done' : i === run.round ? 'now' : ''}"></i>`).join('');
       if (B && (B.boss === 'tempest' || B.boss === 'chaos' || B.boss === 'hive')) {
         t = B.boss === 'chaos' ? '?' : B.boss === 'hive' ? '+' : B.wind[0] > 0 ? '&rarr;' : B.wind[0] < 0 ? '&larr;' : B.wind[1] > 0 ? '&uarr;' : '&darr;';
-        t += [2, 1].map(k => `<i class="${B.timer >= k ? '' : 'on'}"></i>`).join('');
+        t += (B.boss === 'hive' ? [4, 3, 2, 1] : [2, 1]).map(k => `<i class="${B.timer >= k ? '' : 'on'}"></i>`).join('');
       }
     }
     $('#timer').innerHTML = t;
@@ -542,7 +542,7 @@
     const st = R.state();
     for (const u of run.army) st.b[u.slot] = { id: u.id, t: u.t, s: 0, hp: u.t === 'K' && has('heart') ? 2 : R.hpOf(u.t) };
     st.f[0] = flags(has);
-    B = { st, boss, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: 2, bonus: opt ? opt.gold : 0 };
+    B = { st, boss, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: boss === 'hive' ? 4 : 2, bonus: opt ? opt.gold : 0 };
     hud();
     for (const f of opt ? opt.foes : genEnemy(r)) {
       seen(f.t);
@@ -753,11 +753,11 @@
     } else if (B.boss === 'chaos') {
       if (--B.timer <= 0) { await mutate(); B.timer = 2; }
     } else if (B.boss === 'hive') {
-      if (--B.timer <= 0) { await spawnDrone(); B.timer = 2; } else hivePick();
+      if (--B.timer <= 0) { await spawnDrone(); B.timer = 4; } else hivePick();
     } else if (B.boss === 'frost') await freeze();
     doom(); hud();
   }
-  // --- hive: the queen lays a pawn near her every 2 turns (spot telegraphed a turn ahead)
+  // --- hive: the queen lays a pawn near her every 4 turns (spot telegraphed a turn ahead)
   function hivePick() {
     const st = B.st, k = st.b.findIndex(p => p && p.s === 1 && p.t === 'K'); B.hiveAt = -1; if (k < 0) return;
     const kx = k % 6, ky = (k / 6) | 0, free = [];
@@ -876,8 +876,8 @@
   }
   function roll() {
     const act = Math.min(ACTS - 1, ((run.round + 1) / 3) | 0);
-    let pool = [['P', 'P', 'N', 'B', 'F', 'S', 'M', 'A'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H', 'A', 'W', 'L'], ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W'],
-      ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W', 'A']][act];
+    let pool = [['P', 'P', 'N', 'B', 'F', 'S', 'M', 'A'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H', 'A', 'W', 'L'], ['N', 'B', 'R', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W'],
+      ['N', 'B', 'R', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W', 'A']][act];
     if (run.pvp) pool = PVP_POOL;
     const rel = (run.pvp ? PVP_RELICS : Object.keys(RELICS)).filter(k => !run.relics.includes(k)).sort(() => rand() - .5);
     const offs = [{ t: pick(pool) }, { t: pick(pool) }, rel.length > 1 && rand() < .5 ? { rel: rel[1] } : { t: pick(run.pvp ? pool : REELS[0]) }, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
@@ -1022,18 +1022,18 @@
     if (hover < 0 || hover === downTile || sel == null) return;
     if ((phase === 'player' && selMoves.some(m => m.t === hover)) || (phase === 'shop' && hover < 12)) click(hover);
   });
-  function pieceTip(i) { // name, what it does, and anything special about this one
+  function pieceTip(i) { // name, plus anything special about this one (no description)
     let p;
     if (B) { p = B.st.b[i]; if (p && B.vis && !B.vis[i] && p.s === 1 && p.t !== 'K') return null; }
     else { const u = run.army.find(u => u.slot === i); p = u && { t: u.t, s: 0 }; }
     if (!p) return null;
     const boss = B && B.boss && p.s === 1 && p.t === 'K';
-    const [name, desc] = boss ? [B.boss.toUpperCase(), BOSSDESC[B.boss]] : NAMES[p.t], tags = [];
+    const name = boss ? B.boss.toUpperCase() : NAMES[p.t][0], tags = [];
     if (p.dz && p.t !== 'K') tags.push('<em class="stun">STUNNED</em>');
     if (B && B.st.fz && B.st.fz[i] && p.t !== 'K') tags.push('<em class="ice">FROZEN</em>');
     if (p.hp > 1) tags.push('<em>' + p.hp + ' HP</em>');
     if (p.kills) tags.push('<em>+' + p.kills + ' RANGE</em>');
-    return [(B && B.pvp ? '<s>P' + (p.s + 1) + '</s> ' : p.s ? '<s>FOE</s> ' : '') + name, desc + (tags.length ? '<br>' + tags.join(' ') : '')];
+    return [(B && B.pvp ? '<s>P' + (p.s + 1) + '</s> ' : p.s ? '<s>FOE</s> ' : '') + name, tags.join(' ')];
   }
   function tip() {
     const el = $('#tip'); let t = null;
@@ -1043,7 +1043,7 @@
     } else if (run && (phase === 'shop' || phase === 'player')) {
       const r = gfx.ray(mouse.nx, mouse.ny);
       for (const s of shelf) if (rayDist(r, [s.e.p[0], s.e.p[1] + .3, s.e.p[2]]) < .4) t = RELICS[s.k].slice(1);
-      const o = shop && shop.offers.find(o => o.i === hover && !o.sold); if (o) t = o.rel ? RELICS[o.rel].slice(1) : NAMES[o.t];
+      const o = shop && shop.offers.find(o => o.i === hover && !o.sold); if (o) t = o.rel ? RELICS[o.rel].slice(1) : [NAMES[o.t][0]];
       if (!t && hover >= 0 && hover < 36) t = pieceTip(hover);
     }
     if (!t) { el.style.display = 'none'; return; }
