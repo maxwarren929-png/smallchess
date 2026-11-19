@@ -10,30 +10,44 @@
   const KN = [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]];
 
   // f[s]: relic flags for side s (shield, crown, wings, frenzy, thorns, fuse, scope, saddle, medal)
-  const state = () => ({ b: Array(N).fill(null), f: [{ shield: 0 }, { shield: 0 }], turn: 0, again: null, w: -1, doom: null, nid: 1e6, fz: null });
-  const clone = st => ({ b: st.b.slice(), f: [{ ...st.f[0] }, { ...st.f[1] }], turn: st.turn, again: st.again, w: st.w, doom: st.doom, nid: st.nid, fz: st.fz });
+  // hole: tiles that crumbled away (collapse boss) -- nothing can stand on or pass through them
+  const state = () => ({ b: Array(N).fill(null), f: [{ shield: 0 }, { shield: 0 }], turn: 0, again: null, w: -1, doom: null, nid: 1e6, fz: null, hole: null });
+  const clone = st => ({ b: st.b.slice(), f: [{ ...st.f[0] }, { ...st.f[1] }], turn: st.turn, again: st.again, w: st.w, doom: st.doom, nid: st.nid, fz: st.fz, hole: st.hole });
+  // wearables (p.g): lens +2 range on shots/pulls, cloak can't be shot or hooked, treads can't be shoved/pulled, striders also step 1 any way
+  // p.wd = warded (rally): can't be captured or killed until the other side has had its first turn
+  const shootable = (q, s) => q.s !== s && q.g !== 'cloak' && !q.wd;
 
   // move: {f, t, k}  k: 0 move, 1 capture, 2 ranged shot (shooter stays), 3 hook pull, 4 ram push, 5 swap with an ally
-  // p.hp = hits left (golem), p.dz = stunned by a hook (skips its side's next turn)
+  // p.hp = hits left (golem), p.dz = turns left stunned (hook: 1, shackles: 2)
   function moves(st, i, out = []) {
     const p = st.b[i]; if (!p) return out;
     if (p.t !== 'K' && ((st.fz && st.fz[i]) || p.dz)) return out; // frozen in place (frost boss) or stunned (hook)
-    const x = i % W, y = (i / W) | 0, s = p.s, b = st.b, n0 = out.length;
+    const x = i % W, y = (i / W) | 0, s = p.s, b = st.b, n0 = out.length, hole = st.hole, lens = p.g === 'lens' ? 2 : 0;
     const step = (dx, dy, mode) => { // mode 0 both, 1 move only, 2 capture only
       const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) return;
-      const j = nx + ny * W, q = b[j];
+      const j = nx + ny * W, q = b[j]; if (hole && hole[j]) return;
       if (!q) { if (mode !== 2) out.push({ f: i, t: j, k: 0 }); }
-      else if (q.s !== s && mode !== 1) out.push({ f: i, t: j, k: 1 });
+      else if (q.s !== s && mode !== 1 && !q.wd) out.push({ f: i, t: j, k: 1 });
     };
     const slide = (dirs, rng, phase) => {
       for (const [dx, dy] of dirs) {
         let nx = x + dx, ny = y + dy, r = 0;
         while (r < rng && nx >= 0 && ny >= 0 && nx < W && ny < H) {
           const j = nx + ny * W, q = b[j];
-          if (!q) out.push({ f: i, t: j, k: 0 });
-          else { if (q.s !== s) out.push({ f: i, t: j, k: 1 }); if (!phase) break; }
+          if (hole && hole[j]) { if (!phase) break; }
+          else if (!q) out.push({ f: i, t: j, k: 0 });
+          else { if (q.s !== s && !q.wd) out.push({ f: i, t: j, k: 1 }); if (!phase) break; }
           nx += dx; ny += dy; r++;
         }
+      }
+    };
+    // ranged: the first piece in a straight line within rng tiles; holes block the line
+    const ray = (dx, dy, rng, fn) => {
+      let nx = x + dx, ny = y + dy, r = 0;
+      while (r < rng && nx >= 0 && ny >= 0 && nx < W && ny < H) {
+        const j = nx + ny * W; if (hole && hole[j]) return;
+        if (b[j]) return fn(j, b[j], r);
+        nx += dx; ny += dy; r++;
       }
     };
     switch (p.t) {
@@ -51,37 +65,25 @@
       case 'X': for (const d of D8) step(d[0], d[1], 0); break;
       case 'G': slide(DIAG, 2, true); break;
       case 'C': case 'H': { // cannon shoots the first piece in a line; hook pulls it next to itself (and can bite adjacent foes)
-        const hook = p.t === 'H', rng = (hook ? 5 : 3) + (st.f[s].scope ? 3 : 0);
+        const hook = p.t === 'H', rng = (hook ? 5 : 3) + (st.f[s].scope ? 3 : 0) + lens;
         for (const d of hook ? D8 : ORTH) step(d[0], d[1], hook ? 0 : 1); // hook steps/bites any way, cannon only walks straight
-        for (const [dx, dy] of ORTH) {
-          let nx = x + dx, ny = y + dy, r = 0;
-          while (r < rng && nx >= 0 && ny >= 0 && nx < W && ny < H) {
-            const j = nx + ny * W, q = b[j];
-            if (q) { if (q.s !== s && (!hook || r > 0)) out.push({ f: i, t: j, k: hook ? 3 : 2 }); break; }
-            nx += dx; ny += dy; r++;
-          }
-        }
+        for (const [dx, dy] of ORTH) ray(dx, dy, rng, (j, q, r) => {
+          if (hook ? r > 0 && q.s !== s && q.g !== 'cloak' && q.g !== 'treads' : shootable(q, s)) out.push({ f: i, t: j, k: hook ? 3 : 2 });
+        });
         break;
       }
       case 'M': // ram: walks, and shoves an adjacent enemy one tile, diagonals too (crushing it against walls/pieces)
         for (const [dx, dy] of D8) {
           const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-          const j = nx + ny * W, q = b[j];
-          if (!q) out.push({ f: i, t: j, k: 0 }); else if (q.s !== s) out.push({ f: i, t: j, k: 4 });
+          const j = nx + ny * W, q = b[j]; if (hole && hole[j]) continue;
+          if (!q) out.push({ f: i, t: j, k: 0 }); else if (q.s !== s && q.g !== 'treads') out.push({ f: i, t: j, k: 4 });
         }
         break;
       case 'S': for (const d of D8) step(d[0], d[1], 0); break;
       case 'O': for (const d of ORTH) step(d[0], d[1], 0); break;
       case 'A': // archer: walks straight, shoots the first piece up to 2 tiles diagonally
         for (const d of ORTH) step(d[0], d[1], 1);
-        for (const [dx, dy] of DIAG) {
-          let nx = x + dx, ny = y + dy, r = 0;
-          while (r < 2 && nx >= 0 && ny >= 0 && nx < W && ny < H) {
-            const j = nx + ny * W, q = b[j];
-            if (q) { if (q.s !== s) out.push({ f: i, t: j, k: 2 }); break; }
-            nx += dx; ny += dy; r++;
-          }
-        }
+        for (const [dx, dy] of DIAG) ray(dx, dy, 2 + lens, (j, q) => { if (shootable(q, s)) out.push({ f: i, t: j, k: 2 }); });
         break;
       case 'W': // mage: steps diagonally, or trades places with an ally up to 2 tiles away
         for (const d of DIAG) step(d[0], d[1], 0);
@@ -93,6 +95,12 @@
         break;
       case 'V': slide(D8, 1 + (p.kills || 0)); break; // vampire: every kill adds a tile of reach (see apply), up to 4
       case 'L': slide(ORTH, 3, true); break; // lancer: charges 3 straight, leaping blockers
+    }
+    if (p.g === 'striders') { // one extra step any way, on top of whatever the piece already does
+      const had = new Set(); for (let k = n0; k < out.length; k++) had.add(out[k].t);
+      const n1 = out.length; for (const d of D8) step(d[0], d[1], 0);
+      let w = n1; for (let k = n1; k < out.length; k++) if (!had.has(out[k].t)) out[w++] = out[k];
+      out.length = w;
     }
     if (st.again === p.id) { // fury's bonus move is a reposition only: no attacks
       let w = n0; for (let k = n0; k < out.length; k++) if (out[k].k === 0 || out[k].k === 5) out[w++] = out[k];
@@ -115,6 +123,7 @@
   // Remove the piece on tile j (shield / hit points may save it). src = tile idx or world pos of the cause.
   function kill(st, j, ev, src, boomQ) {
     const q = st.b[j]; if (!q) return false;
+    if (q.wd) { ev && ev.push({ e: 'ward', id: q.id, at: j }); return false; }
     if (st.f[q.s].shield > 0) { st.f[q.s].shield--; ev && ev.push({ e: 'shield', id: q.id, at: j }); return false; }
     if (q.hp > 1) { st.b[j] = { ...q, hp: q.hp - 1 }; ev && ev.push({ e: 'hit', id: q.id, at: j }); return false; }
     st.b[j] = null; if (q.t === 'K') st.w = 1 - q.s;
@@ -129,7 +138,7 @@
       const x = j % W, y = (j / W) | 0; let n = 2;
       for (const [dx, dy] of D8) {
         const nx = x + dx, ny = y + dy; if (!n || nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-        const k = nx + ny * W; if (st.b[k]) continue;
+        const k = nx + ny * W; if (st.b[k] || (st.hole && st.hole[k])) continue;
         const id = st.nid++; st.b[k] = { id, t: 'P', s: q.s }; n--;
         ev && ev.push({ e: 'spawn', id, t: 'P', s: q.s, at: k, src: j });
       }
@@ -147,9 +156,13 @@
       }
     }
   }
-  // end of a side's turn: its stunned pieces recover, then the other side moves
+  // end of a side's turn: its stunned pieces tick down, the other side's rally ward wears off, then the other side moves
   const end = st => {
-    for (let i = 0; i < N; i++) { const p = st.b[i]; if (p && p.dz && p.s === st.turn) st.b[i] = { ...p, dz: 0 }; }
+    for (let i = 0; i < N; i++) {
+      const p = st.b[i]; if (!p) continue;
+      if (p.dz && p.s === st.turn) st.b[i] = { ...st.b[i], dz: p.dz - 1 };
+      if (p.wd && p.s !== st.turn) st.b[i] = { ...st.b[i], wd: 0 };
+    }
     st.again = null; st.turn ^= 1;
   };
 
@@ -162,14 +175,14 @@
     } else if (m.k === 3) { // hook: drag the target to the tile next to the hook; it's stunned for a turn (kings shrug it off)
       const q = st.b[m.t], fx = m.f % W, fy = (m.f / W) | 0, dx = Math.sign((m.t % W) - fx), dy = Math.sign(((m.t / W) | 0) - fy), to = fx + dx + (fy + dy) * W;
       const dz = q.t !== 'K';
-      st.b[m.t] = null; st.b[to] = dz ? { ...q, dz: 1 } : q;
+      st.b[m.t] = null; st.b[to] = dz ? { ...q, dz: Math.max(1, q.dz || 0) } : q;
       ev && ev.push({ e: 'pull', id: p.id, tid: q.id, f: m.t, t: to, dz });
     } else if (m.k === 5) { // mage: trade places with an ally
       const q = st.b[m.t]; st.b[m.t] = p; st.b[m.f] = q;
       ev && ev.push({ e: 'swap', id: p.id, tid: q.id, f: m.f, t: m.t });
     } else if (m.k === 4) { // ram: shove the target one tile; if it can't move it gets crushed
       const q = st.b[m.t], dx = (m.t % W) - (m.f % W), dy = ((m.t / W) | 0) - ((m.f / W) | 0), nx = (m.t % W) + dx, ny = ((m.t / W) | 0) + dy;
-      const free = nx >= 0 && ny >= 0 && nx < W && ny < H && !st.b[nx + ny * W];
+      const free = nx >= 0 && ny >= 0 && nx < W && ny < H && !st.b[nx + ny * W] && !(st.hole && st.hole[nx + ny * W]);
       ev && ev.push({ e: 'ram', id: p.id, f: m.f, t: m.t, tid: q.id, to: free ? nx + ny * W : null });
       if (free) { st.b[nx + ny * W] = q; st.b[m.t] = null; }
       else cap = kill(st, m.t, ev, m.f, boomQ);
@@ -231,7 +244,7 @@
     let v = 0;
     for (let i = 0; i < N; i++) {
       const p = st.b[i]; if (!p) continue;
-      let a = VAL[p.t] + (p.hp > 1 ? (p.hp - 1) * 1.5 : 0);
+      let a = VAL[p.t] + (p.hp > 1 ? (p.hp - 1) * 1.5 : 0) + (p.g ? .8 : 0);
       if (p.t !== 'K') {
         if (st.doom && st.doom[i]) a = 0;
         else {

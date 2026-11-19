@@ -22,27 +22,50 @@
   };
   const RELICS = {
     shield: [9, 'AEGIS', 'blocks 1 capture'], frenzy: [12, 'FURY', 'capture = free move after'], crown: [8, 'CROWN', 'king strides 2'], wings: [6, 'WINGS', 'pawns sidestep'],
-    purse: [7, 'PURSE', '+1 per capture'], bolt: [8, 'BOLT', 'smites a foe'], egg: [6, 'EGG', 'free pawn'], thorns: [8, 'THORNS', 'pawns bite back'],
-    heart: [12, 'HEART', 'king takes 2 hits'], boots: [6, 'BOOTS', 'lava-proof'], anchor: [6, 'ANCHOR', 'wind-proof'], piggy: [8, 'PIGGY', '+1 per 5 saved'],
+    purse: [7, 'PURSE', 'capture gold x2 (max 6)'], bolt: [8, 'BOLT', 'smites a foe'], egg: [6, 'EGG', 'free pawn'], thorns: [8, 'THORNS', 'pawns bite back'],
+    heart: [12, 'HEART', 'king takes 2 hits'], boots: [6, 'BOOTS', 'lava-proof'], anchor: [6, 'ANCHOR', 'wind-proof'], piggy: [8, 'PIGGY', '+1 per 5 saved (max 3)'],
     clover: [6, 'CLOVER', 'free reroll'], fuse: [9, 'FUSE', 'bigger bomb blasts'], scope: [7, 'SCOPE', 'cannon, hook +3 range'], horn: [7, 'HORN', 'pawns start ahead'],
     goblet: [8, 'GOBLET', '+3 gold per win'], saddle: [7, 'SADDLE', 'knights step straight'], coupon: [8, 'COUPON', 'shop items cost 1 less'],
     scythe: [9, 'SCYTHE', 'reaps 2 foe pawns'], medal: [7, 'MEDAL', 'pawns promote a row early'],
+    bell: [7, 'BELL', 'foe pawns start stunned'], ledger: [6, 'LEDGER', 'sell at full price'], hourglass: [7, 'HOURGLASS', '+3 gold: win within 8 turns'],
+    phoenix: [12, 'PHOENIX', 'survive one lost fight'], vigil: [8, 'VIGIL', 'first loss each fight returns as a pawn'],
+    rally: [8, 'RALLY', 'pawns safe on the foe\'s first turn'], shackles: [9, 'SHACKLES', 'strongest foe starts stunned 2 turns'],
   };
-  const BOSS = ['inferno', 'tempest', 'chaos', 'hive', 'frost', 'eclipse'];
+  // wearables: bought into a 3-slot rack, then dragged onto a piece (one each). The rules read them as p.g.
+  const GEAR = { lens: [5, 'LENS', '+2 range on shots and pulls'], cloak: [5, 'CLOAK', 'can\'t be shot or hooked'], treads: [4, 'TREADS', 'can\'t be shoved, pulled or blown'], striders: [5, 'STRIDERS', 'also steps 1 any way'] };
+  const RACK = 3;
+  // relics that do something for whoever holds them in a fight (enemies only ever get these)
+  const COMBAT = ['shield', 'frenzy', 'crown', 'wings', 'bolt', 'egg', 'thorns', 'heart', 'fuse', 'scope', 'horn', 'saddle', 'scythe', 'medal', 'bell', 'vigil', 'rally', 'shackles'];
+  const BOSS = ['inferno', 'tempest', 'chaos', 'hive', 'frost', 'eclipse', 'necro', 'siege', 'mimic', 'collapse'], FINAL = 'tyrant';
   const BOSSDESC = { inferno: 'lava erupts on marked tiles', tempest: 'wind shoves everything every 2 turns', chaos: 'pieces mutate every 2 turns',
-    hive: 'lays a pawn every 4 turns', frost: 'marked tiles freeze pieces', eclipse: 'fog hides far-off foes' };
-  const ACTS = 4, ROUNDS = ACTS * 3; // every act: two fights, then a boss
-  CL.data = { NAMES, PRICE, RELICS, MODEL };
+    hive: 'lays a pawn every 4 turns', frost: 'marked tiles freeze pieces', eclipse: 'fog hides far-off foes',
+    necro: 'the dead rise as pawns', siege: 'a row or column is shelled every 3 turns', mimic: 'copies your relics', collapse: 'the edge crumbles away',
+    tyrant: 'king takes 2 hits, fully armed' };
+  // bosses that act on a countdown (pips in the hud), and the bosses whose effects land between turns
+  const TIMED = { tempest: 2, chaos: 2, hive: 4, siege: 3, collapse: 3 };
+  const TICKS = new Set(['inferno', 'tempest', 'chaos', 'hive', 'frost', 'necro', 'siege', 'collapse']);
+  const ACTS = 8, ROUNDS = ACTS * 3; // every act: two fights, then a boss
+  CL.data = { NAMES, PRICE, RELICS, GEAR, MODEL };
   const seen = t => CL.codex && CL.codex.seen(t), seenRel = k => CL.codex && CL.codex.seenRel(k);
   const PA = [.97, .92, .8], PB = [.25, .78, .82], EA = [.36, .27, .5], EB = [.98, .36, .32], COL = [{ A: PA, B: PB }, { A: EA, B: EB }];
-  const PVP_RELICS = Object.keys(RELICS).filter(k => k !== 'boots' && k !== 'anchor'); // those two only matter against bosses
-  const BOSSCOL = { inferno: [[.3, .13, .12], [1, .6, .15]], tempest: [[.2, .32, .42], [.7, 1, 1]], chaos: [[.14, .1, .2], [1, .3, .9]], hive: [[.32, .22, .05], [1, .78, .2]], frost: [[.2, .3, .45], [.7, .95, 1]], eclipse: [[.08, .05, .12], [.8, .35, 1]] };
-  const C = { sel: [1, .85, .3], move: [.3, .95, 1], danger: [1, .6, .2], cap: [1, .25, .2], foe: [.85, .3, .7], hover: [1, 1, 1], last: [.7, .4, .9], lava: [1, .5, .1], wind: [.8, 1, 1], gold: [1, .8, .3], no: [.5, .3, .35], ice: [.3, .75, 1], hive: [1, .75, .2], fog: [.04, .03, .08] };
+  const PVP_RELICS = Object.keys(RELICS).filter(k => !['boots', 'anchor', 'phoenix', 'hourglass'].includes(k)); // boss-only or run-only
+  const BOSSCOL = { inferno: [[.3, .13, .12], [1, .6, .15]], tempest: [[.2, .32, .42], [.7, 1, 1]], chaos: [[.14, .1, .2], [1, .3, .9]], hive: [[.32, .22, .05], [1, .78, .2]], frost: [[.2, .3, .45], [.7, .95, 1]], eclipse: [[.08, .05, .12], [.8, .35, 1]],
+    necro: [[.12, .16, .12], [.5, 1, .55]], siege: [[.3, .26, .22], [1, .45, .25]], mimic: [[.25, .22, .3], [.95, .95, 1]], collapse: [[.28, .2, .14], [.9, .6, .35]], tyrant: [[.1, .06, .08], [1, .82, .3]] };
+  const C = { sel: [1, .85, .3], move: [.3, .95, 1], danger: [1, .6, .2], cap: [1, .25, .2], foe: [.85, .3, .7], hover: [1, 1, 1], last: [.7, .4, .9], lava: [1, .5, .1], wind: [.8, 1, 1], gold: [1, .8, .3], no: [.5, .3, .35], ice: [.3, .75, 1], hive: [1, .75, .2], fog: [.04, .03, .08], grave: [.45, 1, .5], shell: [1, .4, .2], crumble: [.9, .6, .3] };
   const TH = {
     a0: { skyA: [.06, .07, .2], skyB: [.2, .38, .52], tA: [.9, .84, .7], tB: [.33, .52, .56], glow: [.3, .95, 1], sun: [1.1, 1.04, .92], amb: [.42, .45, .7] },
     a1: { skyA: [.12, .05, .24], skyB: [.55, .27, .52], tA: [.92, .8, .82], tB: [.5, .36, .62], glow: [1, .5, .9], sun: [1.1, 1, .98], amb: [.5, .4, .7] },
     a2: { skyA: [.03, .03, .09], skyB: [.3, .13, .24], tA: [.8, .78, .8], tB: [.3, .29, .4], glow: [1, .3, .45], sun: [1.05, 1, 1.05], amb: [.4, .38, .6] },
     a3: { skyA: [.14, .08, .04], skyB: [.75, .5, .25], tA: [.95, .88, .7], tB: [.55, .42, .3], glow: [1, .8, .4], sun: [1.15, 1.05, .9], amb: [.55, .48, .5] },
+    a4: { skyA: [.03, .1, .08], skyB: [.18, .45, .38], tA: [.82, .9, .82], tB: [.28, .44, .4], glow: [.4, 1, .7], sun: [1.05, 1.1, 1], amb: [.4, .55, .55] },
+    a5: { skyA: [.16, .04, .06], skyB: [.6, .2, .22], tA: [.92, .8, .76], tB: [.48, .26, .3], glow: [1, .4, .35], sun: [1.15, .98, .92], amb: [.58, .38, .45] },
+    a6: { skyA: [.02, .02, .06], skyB: [.12, .16, .36], tA: [.78, .8, .92], tB: [.24, .28, .46], glow: [.5, .7, 1], sun: [1, 1.02, 1.15], amb: [.36, .4, .62] },
+    a7: { skyA: [.06, .02, .02], skyB: [.32, .1, .04], tA: [.86, .74, .6], tB: [.3, .18, .16], glow: [1, .7, .25], sun: [1.2, 1, .8], amb: [.5, .32, .3] },
+    necro: { skyA: [.03, .06, .04], skyB: [.16, .3, .2], tA: [.7, .76, .7], tB: [.24, .3, .26], glow: [.5, 1, .55], sun: [.95, 1.05, .95], amb: [.35, .45, .4] },
+    siege: { skyA: [.12, .07, .05], skyB: [.5, .32, .22], tA: [.84, .76, .66], tB: [.42, .34, .3], glow: [1, .45, .25], sun: [1.12, 1, .9], amb: [.52, .42, .42] },
+    mimic: { skyA: [.08, .08, .12], skyB: [.4, .4, .5], tA: [.88, .88, .92], tB: [.36, .36, .46], glow: [.95, .95, 1], sun: [1.05, 1.05, 1.1], amb: [.48, .48, .6] },
+    collapse: { skyA: [.1, .06, .03], skyB: [.45, .3, .16], tA: [.85, .74, .58], tB: [.44, .32, .22], glow: [.9, .6, .3], sun: [1.12, 1, .85], amb: [.52, .42, .36] },
+    tyrant: { skyA: [.05, .01, .02], skyB: [.3, .06, .1], tA: [.8, .7, .62], tB: [.26, .14, .16], glow: [1, .82, .3], sun: [1.2, .95, .85], amb: [.5, .3, .35] },
     inferno: { skyA: [.16, .03, .02], skyB: [.8, .32, .08], tA: [.86, .68, .5], tB: [.4, .22, .2], glow: [1, .6, .1], sun: [1.2, .98, .76], amb: [.6, .36, .4] },
     tempest: { skyA: [.07, .12, .17], skyB: [.42, .58, .6], tA: [.8, .88, .88], tB: [.3, .44, .52], glow: [.7, 1, 1], sun: [1, 1.06, 1.1], amb: [.42, .52, .66] },
     hive: { skyA: [.14, .08, .02], skyB: [.62, .42, .1], tA: [.95, .82, .5], tB: [.55, .38, .15], glow: [1, .75, .2], sun: [1.15, 1.02, .8], amb: [.6, .48, .35] },
@@ -53,13 +76,14 @@
 
   // ------------------------------------------------------------ state
   let phase = 'title', run, B = null, shop = null, choice = null, sel = null, selMoves = [], peek = null, peekMoves = [], hover = -1, lastMv = null, uid = 1;
+  const SPEED = Math.max(1, Math.min(50, +(Q.get('speed') || 1) | 0));
   let time = 0, tscale = 1, tsReal = 0, shake = 0, punch = 0, sflash = 0, gray = 0, last = 0, demoT = 1;
   let view = 0, camYaw = 0; // pvp: which side the camera looks from (swings round to face whoever moves)
   // pvp: starting budget, round wins needed, gold both players get between rounds (+ a catch-up bonus for the round's loser)
   const PVP_GOLD = +(Q.get('pvpg') || 25), PVP_WINS = +(Q.get('pvpw') || 3), PVP_INCOME = 8, PVP_CATCHUP = 3;
   const PVP_POOL = ['P', 'P', ...Object.keys(PRICE).filter(t => t !== 'P' && t !== 'Q')];
   const ents = new Map(), all = new Set(), shelf = [], MD = {};
-  const blastT = new Float32Array(36), tile = new Float32Array(144), tileK = new Float32Array(36), ty = new Float32Array(36), tv = new Float32Array(36), shBuf = new Float32Array(160);
+  const holeY = new Float32Array(36), blastT = new Float32Array(36), tile = new Float32Array(144), tileK = new Float32Array(36), ty = new Float32Array(36), tv = new Float32Array(36), shBuf = new Float32Array(160);
   const envBones = new Float32Array(128), mouse = { x: 0, y: 0, nx: 0, ny: 0 };
   const cur = JSON.parse(JSON.stringify(TH.a0)); let theme = TH.a0;
 
@@ -212,7 +236,29 @@
     shake = Math.max(shake, v.king ? .8 : .35); punch = 1; sflash = Math.max(sflash, .12); sfx.cap();
     if (v.king) { tscale = .2; tsReal = .9; } else hitstop();
     if (B && B.pvp) { const P = run.P[1 - v.side]; if (P.relics.includes('purse')) { P.gold++; flashRelic('purse', 1 - v.side); } } // banked for the next shop
-    else if (v.side === 1 && B) coins(v.p, 1 + (run.relics.includes('purse') ? 1 : 0));
+    else if (v.side === 1 && B) { // capture gold: 1 each (2 with purse), capped per fight so a big army can't farm a big army
+      const pu = run.relics.includes('purse'), n = Math.min(pu ? 2 : 1, (pu ? 6 : 3) - B.capG);
+      if (n > 0) { B.capG += n; coins(v.p, n); }
+    }
+    if (B && !v.king && B.st.w < 0) {
+      if (B.boss === 'necro' && v.side === 1) { const i = tileAt(v.p[0], v.p[2]); if (i >= 0 && B.graves.length < 6) B.graves.push({ i, n: 2 }); }
+      vigil(v.side);
+    }
+  }
+  // does side s hold relic k in this fight? (regular mode: side 1 is the enemy and its relics live on B)
+  const sideHas = (s, k) => B && B.pvp ? run.P[s].relics.includes(k) : s ? !!(B && B.foeRel.includes(k)) : run.relics.includes(k);
+  const foeCol = () => [EA, B && B.boss ? BOSSCOL[B.boss][1] : EB];
+  // put a fresh pawn for side s on tile i (vigil, necro, hive); the board state changes now, the model pops in
+  function addPawn(i, s, col) {
+    const id = uid++; B.st.b[i] = { id, t: 'P', s, hp: 1 };
+    const c = col || (s ? foeCol() : [PA, PB]), e = mkEnt('pawn', TP(i), { side: s, yaw: s ? 0 : Math.PI, A: c[0], B: c[1] });
+    ents.set(id, e); appear(e, .25); sfx.pop(); tv[i] -= 2; return e;
+  }
+  function vigil(s) { // the first piece a side loses each fight comes back as a pawn on its home rows
+    if (!sideHas(s, 'vigil') || B.vig[s]) return;
+    const st = B.st, i = [2, 3, 1, 4, 0, 5, 8, 9, 7, 10, 6, 11].map(k => s ? 35 - k : k).find(i => !st.b[i] && !(st.hole && st.hole[i]));
+    if (i === undefined) return;
+    B.vig[s] = 1; addPawn(i, s); flashRelic('vigil', s); burst([TP(i)[0], .5, TP(i)[2]], [1, .85, .4], 18, 3);
   }
   function hurt(v) { // a tough piece survives a hit: golems lose an arm and keep shedding dust
     if (!v) return;
@@ -256,14 +302,17 @@
     $('#modes').classList.toggle('on', phase === 'title');
     let t = '';
     if (run.pvp) { // round wins, then whose shop / whose move
+      $('#track').className = '';
       $('#track').innerHTML = [0, 1].map(s => Array.from({ length: PVP_WINS }, (_, k) => `<i class="p${s + 1}${k < run.wins[s] ? ' done' : ''}"></i>`).join('')).join('<b>VS</b>');
       const w = B ? B.st.turn : run.who;
       if (phase !== 'over') t = `<b class="p${w + 1}">P${w + 1} ${B ? 'TO MOVE' : run.round ? 'SHOP' : 'DRAFT'}</b>`;
     } else {
-      $('#track').innerHTML = Array.from({ length: ROUNDS }, (_, i) => `<i class="${i % 3 === 2 ? 'boss ' : ''}${i < run.round ? 'done' : i === run.round ? 'now' : ''}"></i>`).join('');
-      if (B && (B.boss === 'tempest' || B.boss === 'chaos' || B.boss === 'hive')) {
-        t = B.boss === 'chaos' ? '?' : B.boss === 'hive' ? '+' : B.wind[0] > 0 ? '&rarr;' : B.wind[0] < 0 ? '&larr;' : B.wind[1] > 0 ? '&uarr;' : '&darr;';
-        t += (B.boss === 'hive' ? [4, 3, 2, 1] : [2, 1]).map(k => `<i class="${B.timer >= k ? '' : 'on'}"></i>`).join('');
+      $('#track').className = 'long';
+      $('#track').innerHTML = Array.from({ length: ACTS }, (_, a) => '<span>' + [0, 1, 2].map(k => { const i = a * 3 + k; return `<i class="${k === 2 ? 'boss ' : ''}${i < run.round ? 'done' : i === run.round ? 'now' : ''}"></i>`; }).join('') + '</span>').join('');
+      const n = B && TIMED[B.boss];
+      if (n) {
+        t = { chaos: '?', hive: '+', siege: '&#10041;', collapse: '&#9660;' }[B.boss] || (B.wind[0] > 0 ? '&rarr;' : B.wind[0] < 0 ? '&larr;' : B.wind[1] > 0 ? '&uarr;' : '&darr;');
+        t += Array.from({ length: n }, (_, j) => n - j).map(k => `<i class="${B.timer >= k ? '' : 'on'}"></i>`).join('');
       }
     }
     $('#timer').innerHTML = t;
@@ -293,24 +342,25 @@
 
   // ------------------------------------------------------------ run / army
   function clearAll() {
-    all.clear(); ents.clear(); rainbowT = 0; shelf.length = 0; shop = null; choice = null; B = null; sel = peek = lastMv = null; selMoves = []; PT.length = 0; tweens.length = 0; gray = 0; tscale = 1;
+    all.clear(); ents.clear(); rainbowT = 0; shelf.length = 0; rackE.length = 0; gsel = -1; shop = null; choice = null; B = null; sel = peek = lastMv = null; selMoves = []; PT.length = 0; tweens.length = 0; gray = 0; tscale = 1;
   }
   function addUnit(t, slot) { const u = { t, slot, id: uid++ }; run.army.push(u); seen(t); return u; }
   function unitEnt(u, pop) {
     const e = mkEnt(MODEL[u.t], TP(u.slot), { side: 0, yaw: Math.PI, king: u.t === 'K', ...(run.pvp && run.who ? COL[1] : {}) });
-    ents.set(u.id, e); if (pop) appear(e); return e;
+    ents.set(u.id, e); if (pop) appear(e); if (u.gear) wear(e, u.gear); return e;
   }
   function newRun() {
     clearAll();
-    run = { gold: +(Q.get('g') || 3), round: +(Q.get('r') || 0), relics: [], army: [], bosses: BOSS.slice().sort(() => rand() - .5).slice(0, ACTS) };
-    if (Q.get('boss')) run.bosses = BOSS.slice(0, ACTS).map(() => Q.get('boss')); // ?boss=frost forces every boss (testing)
+    run = { gold: +(Q.get('g') || 3), round: +(Q.get('r') || 0), relics: [], army: [], rack: [], bosses: [...BOSS.slice().sort(() => rand() - .5).slice(0, ACTS - 1), FINAL] };
+    if (Q.get('boss')) run.bosses = run.bosses.map(() => Q.get('boss')); // ?boss=frost forces every boss (testing)
+    (Q.get('gear') || '').split(',').filter(k => GEAR[k]).forEach(k => run.rack.length < RACK && run.rack.push(k));
     unitEnt(addUnit('K', 2), true);
     run.spun = Q.has('start');
     (Q.get('start') || '').split('').filter(t => PRICE[t]).forEach(t => { const s = freeSlot(t); if (s >= 0) unitEnt(addUnit(t, s), true); });
     (Q.get('relics') || '').split(',').filter(k => RELICS[k]).forEach(addRelic);
     (Q.get('army') || '').split('').filter(t => PRICE[t]).forEach(t => { const s = freeSlot(t); if (s >= 0) unitEnt(addUnit(t, s), true); });
     theme = TH['a' + Math.min(ACTS - 1, (run.round / 3) | 0)];
-    phase = 'title'; hud(); splash('CHESSLITE', 'show');
+    showRack(); phase = 'title'; hud(); splash('CHESSLITE', 'show');
   }
   function regularStart() {
     if (phase !== 'title') return;
@@ -403,21 +453,39 @@
   }
   function showShelf(list) { for (const x of shelf) vanish(x.e); shelf.length = 0; for (const [k, s, far] of list) shelfAdd(k, s, far); }
 
-  const BUDGET = [4, 7, 11, 13, 17, 22, 22, 27, 34, 30, 36, 44];
+  const BUDGET = [4, 7, 11, 13, 17, 22, 22, 27, 34, 30, 36, 44, 40, 46, 54, 50, 56, 64, 60, 66, 74, 70, 76, 86];
+  // what the player brings to a fight, in rules piece values (each wearable and fighting relic counts 2)
+  const power = () => run.army.reduce((v, u) => v + (u.t === 'K' ? 0 : R.VAL[u.t]) + (u.gear ? 2 : 0), 0) + 2 * run.relics.filter(k => COMBAT.includes(k)).length;
+  const gearFor = t => pick('CHA'.includes(t) ? ['lens', 'lens', 'cloak'] : ['cloak', 'treads', 'striders']);
+  const NEED = { fuse: 'X', scope: 'CH', saddle: 'N' }; // relics that do nothing without these pieces
   function genEnemy(r, o = {}) {
-    const act = (r / 3) | 0, boss = r % 3 === 2, budget = Math.round(BUDGET[r] * (o.mult || 1));
-    const pool = o.pool || FOEPOOL[act];
+    const act = (r / 3) | 0, boss = r % 3 === 2, bossK = boss ? run.bosses[act] : null;
+    // anti-snowball: the enemy always brings at least ~85% of what you bring
+    let budget = Math.round(Math.max(BUDGET[Math.min(r, BUDGET.length - 1)], power() * .85) * (o.mult || 1));
+    // from act 3 on, enemies carry relics and gear too, paid for out of the same budget
+    let nr = act >= 6 ? 2 + (rand() < .5 ? 1 : 0) : act >= 4 ? 1 + (rand() < .5 ? 1 : 0) : act >= 2 && (boss || rand() < .35) ? 1 : 0, ng = act >= 6 ? 4 : act >= 4 ? 2 : 0;
+    if (bossK === FINAL) { nr = 3; ng = 12; }
+    budget = Math.max(Math.ceil(budget * .6), budget - nr * 4 - Math.min(ng, 4) * 3);
+    const pool = o.pool || foePool(act);
     let pawns = Math.min(6, 2 + act + ((Math.random() * 2) | 0) + (boss ? 1 : 0));
     if (o.pool) pawns = Math.max(1, Math.min(pawns, budget - Math.min(...o.pool.map(t => R.VAL[t])))); // always field at least one signature piece
-    let left = budget - pawns; const big = [], maxBig = act >= 3 ? 8 : 5; // last act: big pieces spill into the front row
-    while (left >= 3 && big.length < maxBig) { const c = pool.filter(t => R.VAL[t] <= left); if (!c.length) break; const t = pick(c); big.push(t); left -= R.VAL[t]; }
-    const front = Math.max(0, big.length - 5);
+    let left = budget - pawns; const big = [], maxBig = act >= 3 ? 8 : 5; // late acts: big pieces spill into the front row
+    while (left >= 3 && big.length < maxBig) {
+      const c = pool.filter(t => R.VAL[t] <= left); if (!c.length) break;
+      const rich = left / (maxBig - big.length) >= 4.5, cc = rich ? c.filter(t => R.VAL[t] >= 4) : c, t = pick(cc.length ? cc : c);
+      big.push(t); left -= R.VAL[t];
+    }
+    const front = Math.max(0, big.length - 5), spare = Math.max(0, pawns + left - (6 - front)); // a full half-board can't hold more pieces
     pawns = Math.min(6 - front, pawns + left);
+    if (act >= 1) { ng += Math.floor(spare / 3); if (act >= 2) nr += Math.floor(spare / 14); }
     const kx = 2 + ((Math.random() * 2) | 0), out = [{ t: 'K', i: 30 + kx, boss }];
     const near = () => [0, 1, 2, 3, 4, 5].map(x => [x, Math.abs(x - kx) + rand(1.2)]).sort((a, b) => a[1] - b[1]).map(a => a[0]);
     const back = near().filter(x => x !== kx).sort(() => rand() - .5); big.slice(0, 5).forEach((t, k) => out.push({ t, i: 30 + back[k] }));
     const fr = near(); big.slice(5).forEach((t, k) => out.push({ t, i: 24 + fr[k] }));
     fr.slice(front, front + pawns).forEach(x => out.push({ t: 'P', i: 24 + x }));
+    const types = new Set(out.map(f => f.t));
+    out.rel = COMBAT.filter(k => !NEED[k] || [...NEED[k]].some(t => types.has(t))).sort(() => rand() - .5).slice(0, Math.min(4, nr));
+    out.filter(f => f.t !== 'K').sort((a, b) => R.VAL[b.t] - R.VAL[a.t]).slice(0, ng).forEach(f => f.g = gearFor(f.t));
     return out;
   }
 
@@ -428,7 +496,7 @@
   function pvpStart() {
     if (phase !== 'title') return;
     sfx.init(); sfx.click(); splash(null); clearAll(); $('#modes').classList.remove('on');
-    run = { pvp: true, who: 0, round: 0, wins: [0, 0], bosses: [], P: [0, 1].map(() => ({ gold: PVP_GOLD, relics: [], army: [{ t: 'K', slot: 2, id: uid++ }] })) };
+    run = { pvp: true, who: 0, round: 0, wins: [0, 0], bosses: [], rack: [], P: [0, 1].map(() => ({ gold: PVP_GOLD, relics: [], army: [{ t: 'K', slot: 2, id: uid++ }] })) };
     for (const k of ['gold', 'army', 'relics']) Object.defineProperty(run, k, { get: () => run.P[run.who][k], set: v => { run.P[run.who][k] = v; } });
     pvpShop(0);
   }
@@ -447,7 +515,7 @@
     for (const [id, e] of [...ents]) { ents.delete(id); vanish(e); }
     theme = TH.a1;
     const st = R.state(), has = s => k => run.P[s].relics.includes(k);
-    B = { st, pvp: true, boss: null, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: 2, bonus: 0 };
+    B = { st, pvp: true, boss: null, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: 2, bonus: 0, foeRel: [], capG: 0, turns: 0, vig: [0, 0], graves: [], line: [], crack: [] };
     showShelf([0, 1].flatMap(s => run.P[s].relics.map(k => [k, s, !!s])));
     hud(); await wait(.4);
     for (const s of [0, 1]) {
@@ -491,7 +559,7 @@
     await wait(2);
     for (const s of [0, 1]) { // income for the next shop
       const P = run.P[s], has = k => P.relics.includes(k);
-      P.gold += PVP_INCOME + (w >= 0 && s !== w ? PVP_CATCHUP : 0) + (s === w && has('goblet') ? 3 : 0) + (has('piggy') ? Math.min(5, (P.gold / 5) | 0) : 0);
+      P.gold += PVP_INCOME + (w >= 0 && s !== w ? PVP_CATCHUP : 0) + (s === w && has('goblet') ? 3 : 0) + (has('piggy') ? Math.min(3, (P.gold / 5) | 0) : 0);
     }
     run.round++;
     pvpShop(0);
@@ -502,11 +570,12 @@
   // Before each normal fight: three armies on pedestals, easy / medium / hard. Hover previews the lineup.
   const DIFF = [{ mult: .8, gold: 0 }, { mult: 1, gold: 2 }, { mult: 1.3, gold: 5 }];
   const FOEPOOL = [['N', 'B', 'F', 'S', 'M', 'A'], ['N', 'B', 'F', 'R', 'X', 'G', 'H', 'S', 'M', 'O', 'A', 'W'], ['N', 'B', 'R', 'X', 'G', 'C', 'Q', 'F', 'H', 'O', 'M', 'W', 'V', 'L'],
-    ['R', 'Q', 'C', 'O', 'V', 'L', 'W', 'A', 'X', 'G', 'H', 'N']];
+    ['R', 'Q', 'C', 'O', 'V', 'L', 'W', 'A', 'X', 'G', 'H', 'N'], ['R', 'Q', 'C', 'O', 'V', 'L', 'W', 'A', 'X', 'G', 'H', 'N', 'B', 'M']];
+  const foePool = act => FOEPOOL[Math.min(act, FOEPOOL.length - 1)];
   async function nextFight() {
     const r = run.round; if (r % 3 === 2) return startBattle();
     phase = 'anim'; theme = TH['a' + ((r / 3) | 0)];
-    const ts = FOEPOOL[(r / 3) | 0].slice().sort(() => rand() - .5), z = TP(14)[2];
+    const ts = foePool((r / 3) | 0).slice().sort(() => rand() - .5), z = TP(14)[2];
     choice = { prev: -1, ghosts: [], opts: DIFF.map((d, k) => {
       const pool = [ts[(k * 2) % ts.length], ts[(k * 2 + 1) % ts.length]], foes = genEnemy(r, { pool, mult: d.mult });
       const top = foes.filter(f => f.t !== 'K').sort((a, b) => R.VAL[b.t] - R.VAL[a.t])[0], p = [(k - 1) * 1.6, 0, z];
@@ -536,24 +605,35 @@
 
   // ------------------------------------------------------------ battle
   async function startBattle(opt) {
-    phase = 'anim'; sel = peek = lastMv = null; selMoves = [];
+    phase = 'anim'; sel = peek = lastMv = null; selMoves = []; gsel = -1;
     const r = run.round, boss = r % 3 === 2 ? run.bosses[(r / 3) | 0] : null, has = k => run.relics.includes(k);
     theme = TH[boss || 'a' + ((r / 3) | 0)];
-    const st = R.state();
-    for (const u of run.army) st.b[u.slot] = { id: u.id, t: u.t, s: 0, hp: u.t === 'K' && has('heart') ? 2 : R.hpOf(u.t) };
-    st.f[0] = flags(has);
-    B = { st, boss, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: boss === 'hive' ? 4 : 2, bonus: opt ? opt.gold : 0 };
+    const st = R.state(), foes = opt ? opt.foes : genEnemy(r);
+    for (const u of run.army) st.b[u.slot] = { id: u.id, t: u.t, s: 0, hp: u.t === 'K' && has('heart') ? 2 : R.hpOf(u.t), ...(u.gear ? { g: u.gear } : {}) };
+    let rel = (foes.rel || []).slice();
+    if (boss === 'mimic') { // copies up to two of your fighting relics (or grabs a random one if you have none)
+      const mine = run.relics.filter(k => COMBAT.includes(k)).sort(() => rand() - .5).slice(0, 2);
+      rel = [...new Set([...(mine.length ? mine : [pick(COMBAT)]), ...rel])].slice(0, 4);
+    }
+    const foeHas = k => rel.includes(k);
+    st.f[0] = flags(has); st.f[1] = flags(foeHas);
+    B = { st, boss, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: TIMED[boss] || 2, bonus: opt ? opt.gold : 0,
+      foeRel: rel, capG: 0, turns: 0, vig: [0, 0], graves: [], line: [], crack: [] };
     hud();
-    for (const f of opt ? opt.foes : genEnemy(r)) {
+    for (const f of foes) {
       seen(f.t);
-      const id = uid++; st.b[f.i] = { id, t: f.t, s: 1, hp: R.hpOf(f.t) };
+      const id = uid++; st.b[f.i] = { id, t: f.t, s: 1, hp: f.t === 'K' && (foeHas('heart') || boss === FINAL) ? 2 : R.hpOf(f.t), ...(f.g ? { g: f.g } : {}) };
       const col = f.boss ? BOSSCOL[boss] : [EA, boss ? BOSSCOL[boss][1] : EB];
       const e = mkEnt(f.boss ? 'boss' : MODEL[f.t], TP(f.i), { side: 1, A: col[0], B: col[1], king: f.t === 'K', sc: f.boss ? 1.2 : 1 });
-      ents.set(id, e); appear(e); sfx.pop(); tv[f.i] -= 1; await wait(.06);
+      ents.set(id, e); appear(e); if (f.g) { wear(e, f.g); seenRel(f.g); } sfx.pop(); tv[f.i] -= 1; await wait(.06);
     }
     await wait(.3);
     if (boss) { splash(boss.toUpperCase(), 'flash', BOSSDESC[boss]); sfx.boss(); shake = .6; await wait(1.4); }
+    if (rel.length) { for (const k of rel) { shelfAdd(k, 1, true); seenRel(k); sfx.pop(); await wait(.12); } await wait(.3); }
     await prefight(st, 0, has);
+    await prefight(st, 1, foeHas);
+    if (boss === 'siege') siegePick();
+    if (boss === 'collapse') { st.hole = new Uint8Array(36); crackPick(); }
     if (boss === 'inferno') addMarks(3);
     if (boss === 'frost') addIce(3);
     if (boss === 'hive') hivePick();
@@ -585,6 +665,19 @@
       const c = []; st.b.forEach((p, i) => { if (p && p.s === o && p.t === 'P') c.push(i); }); c.sort(() => rand() - .5);
       if (c.length) { const ev = [], q = []; flashRelic('scythe', s); for (const i of c.slice(0, 2)) { boltFx(TP(i)); R.kill(st, i, ev, i, q); } R.booms(st, ev, q); await play(ev); await wait(.3); }
     }
+    const stun = (i, n) => { const p = st.b[i]; st.b[i] = { ...p, dz: Math.max(n, p.dz || 0) }; const e = ents.get(p.id); if (e) stunFx(e); };
+    if (has('bell')) { // every enemy pawn is stunned for its side's first turn
+      const c = []; st.b.forEach((p, i) => { if (p && p.s === o && p.t === 'P') c.push(i); });
+      if (c.length) { flashRelic('bell', s); sfx.coin(); c.forEach(i => stun(i, 1)); await wait(.45); }
+    }
+    if (has('shackles')) { // the most valuable enemy piece (not the king) is stunned for two turns
+      let bi = -1; st.b.forEach((p, i) => { if (p && p.s === o && p.t !== 'K' && (bi < 0 || R.VAL[p.t] > R.VAL[st.b[bi].t])) bi = i; });
+      if (bi >= 0) { flashRelic('shackles', s); sfx.chain(); stun(bi, 2); await wait(.45); }
+    }
+    if (has('rally')) { // your pawns can't be taken until the other side has had a turn
+      const c = []; st.b.forEach((p, i) => { if (p && p.s === s && p.t === 'P') c.push(i); });
+      if (c.length) { flashRelic('rally', s); sfx.shield(); for (const i of c) { st.b[i] = { ...st.b[i], wd: 1 }; const e = ents.get(st.b[i].id); if (e) { e.flash = 1; e.sqv -= 6; } } await wait(.4); }
+    }
   }
   async function announce(txt, sub) { splash(txt, 'flash', sub); sfx.boss(); shake = Math.max(shake, .5); sflash = .15; await wait(1.4); }
   // the side to move is checkmated: shake its king, call it, and end the fight without playing it out
@@ -596,10 +689,10 @@
     st.w = 1 - st.turn; return checkEnd();
   }
   // regular mode: is the side to move checkmated? Boss effects land between the AI's move and the player's,
-  // so a net on the boss's king isn't certain in those fights (eclipse only hides tiles, so it's fine).
+  // so a net on the boss's king isn't certain in those fights (TICKS; eclipse, mimic and tyrant don't touch the board).
   async function mated() {
     const st = B.st;
-    if (st.turn === 1 && B.boss && B.boss !== 'eclipse') return false;
+    if (st.turn === 1 && B.boss && TICKS.has(B.boss)) return false;
     if (R.status(st) !== 1) return false;
     return mate();
   }
@@ -612,6 +705,8 @@
     const d = new Uint8Array(36); let any = false;
     for (const m of B.marks) if (m.s === 2) { d[m.i] = 1; any = true; }
     if (B.boss === 'tempest' && B.timer === 1) for (const i of edge(B.wind)) { d[i] = 1; any = true; }
+    if (B.boss === 'siege' && B.timer === 1) for (const i of B.line) { d[i] = 1; any = true; }
+    if (B.boss === 'collapse' && B.timer === 1) for (const i of B.crack) { d[i] = 1; any = true; }
     B.st.doom = any ? d : null;
   }
 
@@ -674,12 +769,13 @@
           unaim(en, y0); await wait(.1); break;
         }
         case 'promo': sfx.morph(); sflash = .2; await morph(en, 'queen'); break;
-        case 'shield': flashRelic('shield'); shieldFx(TP(e.at)); await wait(.15); break;
+        case 'shield': flashRelic('shield', en ? en.side : 0); shieldFx(TP(e.at)); await wait(.15); break;
+        case 'ward': flashRelic('rally', en ? en.side : 0); shieldFx(TP(e.at)); await wait(.15); break;
         case 'bump': {
           const a = [en.p[0], 0, en.p[2]], b = TP(e.t);
           sfx.move(); await hop(en, [lerp(a[0], b[0], .6), 0, lerp(a[2], b[2], .6)], .12, .2);
           if (e.hit != null) hurt(ents.get(e.hit));
-          else { flashRelic('shield'); shieldFx(b); }
+          else { flashRelic('shield', 1 - en.side); shieldFx(b); }
           shake = .3; await hop(en, a, .2, .35); land(en, e.f); break;
         }
       }
@@ -712,7 +808,7 @@
     await enemyTurn();
   }
   async function enemyTurn(guard = 0) {
-    const st = B.st; phase = 'anim';
+    const st = B.st; phase = 'anim'; if (!guard) B.turns++;
     await wait(.22);
     const m = R.best(st, 3);
     if (m) { const ev = []; R.apply(st, m, ev); lastMv = m; await play(ev); } else R.pass(st);
@@ -755,7 +851,59 @@
     } else if (B.boss === 'hive') {
       if (--B.timer <= 0) { await spawnDrone(); B.timer = 4; } else hivePick();
     } else if (B.boss === 'frost') await freeze();
+    else if (B.boss === 'necro') await raiseDead();
+    else if (B.boss === 'siege') { if (--B.timer <= 0) { await shell(); B.timer = TIMED.siege; siegePick(); } }
+    else if (B.boss === 'collapse') { if (--B.timer <= 0) { await crumble(); B.timer = TIMED.collapse; crackPick(); } }
     doom(); hud();
+  }
+  // --- necro: every enemy that dies leaves a grave; two turns later a pawn climbs out (if the tile is free)
+  async function raiseDead() {
+    const st = B.st, up = [];
+    for (const g of B.graves) if (--g.n <= 0 && !st.b[g.i] && st.b.filter(p => p && p.s === 1).length < 14) up.push(g);
+    if (!up.length) return;
+    B.graves = B.graves.filter(g => !up.includes(g));
+    sfx.squelch();
+    for (const g of up) { const p = TP(g.i); addPawn(g.i, 1); burst([p[0], .15, p[2]], [.45, 1, .5], 18, 2.5, { g: 3 }); burst([p[0], .1, p[2]], [.3, .25, .2], 12, 2); await wait(.12); }
+    await wait(.2);
+  }
+  // --- siege: a row or column (aimed where your pieces are) gets shelled every few turns; kings shrug it off
+  function siegePick() {
+    const st = B.st, lines = [];
+    for (let y = 0; y < 5; y++) lines.push(Array.from({ length: 6 }, (_, x) => x + y * 6));
+    for (let x = 0; x < 6; x++) lines.push(Array.from({ length: 5 }, (_, y) => x + y * 6));
+    const score = l => l.reduce((v, i) => { const p = st.b[i]; return v + (p && p.t !== 'K' ? (p.s ? -.6 : 1) : 0); }, 0) + rand(1.2);
+    B.line = lines.map(l => [l, score(l)]).sort((a, b) => b[1] - a[1])[0][0];
+  }
+  async function shell() {
+    const st = B.st, ev = [], q = [];
+    sfx.boom(); shake = Math.max(shake, .6); sflash = .3;
+    for (const i of B.line) {
+      const p = TP(i); blastT[i] = 1.6; tv[i] -= 2.5;
+      for (let k = 0; k < 10; k++) spark(p[0] + rand(-.3, .3), .2, p[2] + rand(-.3, .3), rand(-1, 1), rand(4, 8), rand(-1, 1), [1, rand(.4, .8), .15], rand(.06, .1), rand(.4, .8), { g: 10 });
+      const pc = st.b[i]; if (pc && pc.t !== 'K') R.kill(st, i, ev, [p[0], 3, p[2]], q);
+    }
+    R.booms(st, ev, q); await wait(.15); await play(ev);
+  }
+  // --- collapse: tiles on the outermost ring that's left crack, then fall away; whatever stands there falls too
+  function crackPick() {
+    const st = B.st, ring = i => Math.min(i % 6, 5 - (i % 6), (i / 6) | 0, 5 - ((i / 6) | 0));
+    let n = 0; for (let i = 0; i < 36; i++) n += st.hole[i];
+    B.crack = [];
+    if (n >= 14) return; // leave the middle standing
+    const free = []; for (let i = 0; i < 36; i++) if (!st.hole[i] && !(st.b[i] && st.b[i].t === 'K')) free.push(i);
+    const r0 = Math.min(...free.map(ring));
+    B.crack = free.filter(i => ring(i) === r0).sort(() => rand() - .5).slice(0, 2);
+  }
+  async function crumble() {
+    const st = B.st, ev = [];
+    for (const i of B.crack) {
+      const p = st.b[i]; if (p && p.t === 'K') continue; // a king standing on it holds the tile together
+      st.hole[i] = 1; tv[i] -= 4;
+      const w = TP(i); dust(w, 14); for (let k = 0; k < 16; k++) spark(w[0] + rand(-.4, .4), 0, w[2] + rand(-.4, .4), rand(-.5, .5), rand(-.5, 1.5), rand(-.5, .5), cur.tB, rand(.07, .13), rand(.6, 1.1), { g: 9 });
+      if (p) { st.b[i] = null; ev.push({ e: 'die', id: p.id, at: i, src: [w[0], 1.5, w[2]] }); }
+    }
+    if (B.crack.length) { sfx.thud(); sfx.stomp(); shake = Math.max(shake, .45); }
+    B.crack = []; await wait(.2); await play(ev);
   }
   // --- hive: the queen lays a pawn near her every 4 turns (spot telegraphed a turn ahead)
   function hivePick() {
@@ -767,9 +915,7 @@
   async function spawnDrone() {
     const st = B.st; if (B.hiveAt < 0 || st.b[B.hiveAt]) hivePick();
     const i = B.hiveAt; if (i < 0 || st.b.filter(p => p && p.s === 1).length > 13) return;
-    const id = uid++; st.b[i] = { id, t: 'P', s: 1, hp: 1 };
-    const e = mkEnt('pawn', TP(i), { side: 1, A: EA, B: BOSSCOL.hive[1] }); ents.set(id, e); appear(e, .25);
-    sfx.squelch(); sfx.pop(); tv[i] -= 2; burst([TP(i)[0], .4, TP(i)[2]], [1, .78, .2], 20, 3); B.hiveAt = -1;
+    addPawn(i, 1); sfx.squelch(); burst([TP(i)[0], .4, TP(i)[2]], [1, .78, .2], 20, 3); B.hiveAt = -1;
     await wait(.3); hivePick();
   }
   // --- frost: telegraphed tiles freeze; pieces on them can't move for a round, then thaw
@@ -790,7 +936,7 @@
     for (let k = 0; k < 160; k++) spark(rand(-4, 4) - dx * 3, rand(.1, 1.6), rand(-4, 4) + dy * 3, dx * rand(9, 15), 0, -dy * rand(9, 15), [.85, 1, 1], rand(.05, .09), rand(.4, .8), { g: 0, drag: 0 });
     for (let k = 5; k >= 0; k--) for (let j = 0; j < 6; j++) { // leading edge first
       const x = dx ? (dx > 0 ? k : 5 - k) : j, y = dy ? (dy > 0 ? k : 5 - k) : j, i = x + y * 6, p = st.b[i];
-      if (!p || p.t === 'K' || (p.s === 0 && run.relics.includes('anchor'))) continue;
+      if (!p || p.t === 'K' || p.g === 'treads' || (p.s === 0 && run.relics.includes('anchor'))) continue;
       const nx = x + dx, ny = y + dy;
       if (nx < 0 || ny < 0 || nx > 5 || ny > 5) { const w = TP(i); R.kill(st, i, ev, [w[0] - dx * 2, 0, w[2] + dy * 2], q); }
       else if (!st.b[nx + ny * 6]) { st.b[nx + ny * 6] = p; st.b[i] = null; slides.push([ents.get(p.id), TP(nx + ny * 6), nx + ny * 6]); }
@@ -814,9 +960,10 @@
   async function win() {
     phase = 'anim'; sfx.win(); B.marks = []; lastMv = null;
     for (const [id, e] of [...ents]) if (e.side === 1) { ents.delete(id); e.dead = true; vanish(e); burst([e.p[0], .4, e.p[2]], e.B, 8, 3); await wait(.05); }
-    coins([0, 0, 0], 4 + run.round + B.bonus); await wait(.9);
+    coins([0, 0, 0], 5 + ((run.round / 3) | 0) + B.bonus); await wait(.9); // flat per act: income no longer grows every round
     if (run.relics.includes('goblet')) { flashRelic('goblet'); coins([-3, 0, 1], 3); await wait(.5); }
-    if (run.relics.includes('piggy') && run.gold >= 5) { flashRelic('piggy'); coins([-3, 0, 1], Math.min(5, (run.gold / 5) | 0)); await wait(.6); }
+    if (run.relics.includes('hourglass') && B.turns <= 7) { flashRelic('hourglass'); coins([-3, 0, 1], 3); await wait(.5); } // won on move 8 or sooner
+    if (run.relics.includes('piggy') && run.gold >= 5) { flashRelic('piggy'); coins([-3, 0, 1], Math.min(3, (run.gold / 5) | 0)); await wait(.6); }
     if (run.round >= ROUNDS - 1) {
       phase = 'over'; splash('VICTORY', 'show', '&#9654;');
       for (let k = 0; k < 12; k++) wait(k * .25).then(() => burst([rand(-3, 3), rand(1, 3), rand(-3, 3)], [rand(.4, 1), rand(.4, 1), rand(.4, 1)], 40, 6, { g: 5 }));
@@ -825,13 +972,23 @@
     enterShop();
   }
   async function lose() {
-    phase = 'anim'; sfx.lose(); await tw(.6, k => gray = k);
+    phase = 'anim'; sfx.lose();
+    if (run.relics.includes('phoenix')) { // burns up instead of you: the fight is lost, the run goes on
+      const s = shelf.find(x => x.k === 'phoenix' && !x.far);
+      run.relics = run.relics.filter(k => k !== 'phoenix');
+      if (s) { shelf.splice(shelf.indexOf(s), 1); s.e.flash = 1; s.e.spin = 16; burst([s.e.p[0], .5, s.e.p[2]], [1, .55, .15], 50, 6); burst([s.e.p[0], .5, s.e.p[2]], [1, .9, .4], 30, 4); vanish(s.e, .6); }
+      sflash = .5; shake = .5; confetti(60); splash('PHOENIX', 'flash', 'you rise from the ashes'); sfx.boss(); await wait(1.8);
+      if (run.round >= ROUNDS - 1) run.retry = true; // the final fight has to be won, so it comes round again
+      return enterShop();
+    }
+    await tw(.6, k => gray = k);
     splash('DEFEAT', 'show', '&#9654;'); phase = 'over';
   }
 
   // ------------------------------------------------------------ shop
   async function enterShop() {
-    phase = 'anim'; B = null; deselect(); peek = null;
+    phase = 'anim'; deselect(); B = null; peek = null; lastMv = null;
+    for (let k = shelf.length - 1; k >= 0; k--) if (shelf[k].far) { vanish(shelf[k].e); shelf.splice(k, 1); } // the enemy's relics leave with it
     for (const [id, e] of [...ents]) if (!run.army.some(u => u.id === id)) { ents.delete(id); vanish(e); }
     for (const u of run.army) {
       const e = ents.get(u.id);
@@ -863,6 +1020,7 @@
     }
   }
   function shopFx(dt) { // hover: item rises, spins faster, label hops
+    rackE.forEach((e, j) => { const h = shop && (gsel === j || hover === 200 + j) ? 1 : 0; e.lift = lerp(e.lift, h * (gsel === j ? .45 : .2), Math.min(1, dt * 10)); e.spin = .8 + 4 * h; });
     if (!shop) return;
     for (const o of shop.offers) {
       o.lb = Math.max(0, (o.lb || 0) - dt * 3.5); o.sh = Math.max(0, (o.sh || 0) - dt * 2.5);
@@ -874,22 +1032,57 @@
       if (o.rel && o.price >= 10 && rand() < dt * 45) { const p = o.ped.p; spark(p[0] + rand(-.16, .16), rand(.7, 3.6), p[2] + rand(-.16, .16), 0, -rand(.2, .6), 0, [1, .92, .65], rand(.03, .06), rand(.3, .7), { g: 0, drag: 0 }); } // rare relic: light beam
     }
   }
+  const SHOPPOOL = [['P', 'P', 'N', 'B', 'F', 'S', 'M', 'A'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H', 'A', 'W', 'L'], ['N', 'B', 'R', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W'],
+    ['N', 'B', 'R', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W', 'A']];
   function roll() {
     const act = Math.min(ACTS - 1, ((run.round + 1) / 3) | 0);
-    let pool = [['P', 'P', 'N', 'B', 'F', 'S', 'M', 'A'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H', 'A', 'W', 'L'], ['N', 'B', 'R', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W'],
-      ['N', 'B', 'R', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W', 'A']][act];
-    if (run.pvp) pool = PVP_POOL;
+    const pool = run.pvp ? PVP_POOL : SHOPPOOL[Math.min(act, SHOPPOOL.length - 1)];
     const rel = (run.pvp ? PVP_RELICS : Object.keys(RELICS)).filter(k => !run.relics.includes(k)).sort(() => rand() - .5);
-    const offs = [{ t: pick(pool) }, { t: pick(pool) }, rel.length > 1 && rand() < .5 ? { rel: rel[1] } : { t: pick(run.pvp ? pool : REELS[0]) }, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
+    const x = rand(), third = run.pvp ? (rel.length > 1 && x < .5 ? { rel: rel[1] } : { t: pick(pool) }) // pvp: no wearables (yet)
+      : rel.length > 1 && x < .35 ? { rel: rel[1] } : x < .75 ? { gear: pick(Object.keys(GEAR)) } : { t: pick(REELS[0]) };
+    const offs = [{ t: pick(pool) }, { t: pick(pool) }, third, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
     shop.offers = offs.map((o, k) => {
-      const i = 19 + k, p = TP(i), ped = mkEnt('ped', p, {}), item = mkEnt(o.rel || MODEL[o.t], p, { lift: .5, spin: 1.2, sc: .85, bob: .05 });
+      const i = 19 + k, p = TP(i), ped = mkEnt('ped', p, {}), item = mkEnt(o.rel || o.gear || MODEL[o.t], p, { lift: .5, spin: 1.2, sc: .85, bob: .05 });
       raise(ped, item, k * .09, i);
-      if (o.rel) seenRel(o.rel); else seen(o.t);
-      return { ...o, i, ped, item, price: cost(o.rel ? RELICS[o.rel][0] : PRICE[o.t]), sold: false };
+      if (o.rel || o.gear) seenRel(o.rel || o.gear); else seen(o.t);
+      return { ...o, i, ped, item, price: cost(o.rel ? RELICS[o.rel][0] : o.gear ? GEAR[o.gear][0] : PRICE[o.t]), sold: false };
     });
   }
   const cost = p => run.relics.includes('coupon') ? Math.max(1, p - 1) : p;
-  const sellValue = t => Math.max(1, (PRICE[t] / 2) | 0);
+  const sellValue = t => run.relics.includes('ledger') ? PRICE[t] : Math.max(1, (PRICE[t] / 2) | 0);
+
+  // ------------------------------------------------------------ wearables
+  // Bought gear waits on a rack to the right of the board; click (or drag) it onto a piece to put it on. A piece wears one:
+  // putting a second one on swaps the old one back onto the rack. Selling a piece sends its gear back to the rack.
+  const rackE = []; let gsel = -1;
+  const rackPos = j => [4, .15, 2.4 - j * .8];
+  function showRack() {
+    for (const e of rackE) vanish(e); rackE.length = 0;
+    if (run.pvp) return;
+    run.rack.forEach((k, j) => { const e = mkEnt(k, rackPos(j), { sc: .85, spin: .8, bob: .06 }); appear(e); rackE.push(e); });
+    gsel = Math.min(gsel, run.rack.length - 1);
+  }
+  function wear(e, k) { // the gear's model floats over the piece's head and follows it around
+    if (!e) return;
+    if (e.gearE) { vanish(e.gearE, .2); e.gearE.par = null; e.gearE = null; }
+    if (k) { const g = mkEnt(k, [e.p[0], 1, e.p[2]], { sc: .5, spin: 1.4 }); g.par = e; e.gearE = g; appear(g, .25); }
+  }
+  function syncGear() {
+    for (const g of all) {
+      const e = g.par; if (!e) continue;
+      if (e.rag || e.dead || !all.has(e)) { g.par = null; if (e.gearE === g) e.gearE = null; vanish(g, .2); continue; }
+      g.p[0] = e.p[0]; g.p[2] = e.p[2]; g.p[1] = e.p[1] + e.lift + e.hy + ((MD[e.m] && MD[e.m].top) || 1) * e.sc * e.sq + .06 + Math.sin(time * 3 + g.ph) * .03;
+      g.sca = Math.max(g.sca, e.sca); g.fv = e.fv || 0; g.iv = e.iv || 0;
+    }
+  }
+  function equip(j, slot) {
+    const u = run.army.find(u => u.slot === slot), k = run.rack[j]; if (!u || !k) return false;
+    run.rack.splice(j, 1);
+    if (u.gear) run.rack.splice(j, 0, u.gear); // swap: the old one goes back where the new one was
+    u.gear = k; const e = ents.get(u.id); wear(e, k);
+    if (e) { e.flash = 1; e.sqv -= 8; burst([e.p[0], .9, e.p[2]], [.6, .9, 1], 18, 2.5); }
+    gsel = -1; showRack(); sfx.buy(); return true;
+  }
   function sellable() { if (phase !== 'shop' || sel == null) return null; const u = run.army.find(u => u.slot === sel); return u && u.t !== 'K' ? u : null; }
   let sellShown = '';
   function sellBtn() { // only visible while a non-king piece is picked up in the shop
@@ -901,6 +1094,7 @@
     const u = sellable(); if (!u) return;
     const e = ents.get(u.id); sel = null;
     run.army = run.army.filter(x => x !== u); ents.delete(u.id);
+    if (u.gear) { if (run.rack.length < RACK) { run.rack.push(u.gear); showRack(); } else coins(TP(u.slot), Math.max(1, (GEAR[u.gear][0] / 2) | 0)); wear(e, null); }
     if (e) { e.wob = 0; e.flash = 1; e.spin = 14; burst([e.p[0], .5, e.p[2]], e.A, 18, 3.5); burst([e.p[0], .5, e.p[2]], [.25, .2, .25], 12, 2.5, { g: 3 }); vanish(e, .3); }
     tv[u.slot] -= 2; sfx.whoosh(); shake = Math.max(shake, .2);
     coins(TP(u.slot), sellValue(u.t)); sellBtn();
@@ -911,6 +1105,8 @@
     const e = o.item;
     if (run.gold < o.price) return nope(o, true);
     const slot = o.t ? freeSlot(o.t) : -1; if (o.t && slot < 0) return nope(o);
+    if (o.gear && run.rack.length >= RACK) return nope(o);
+    if (o.gear) run.rack.push(o.gear); // claimed now so it can't be bought twice; shown on the rack once it lands
     run.gold -= o.price; o.sold = true; hud(); sfx.click();
     const g = $('#gold'); g.classList.add('bump'); setTimeout(() => g.classList.remove('bump'), 90);
     const u = o.t ? addUnit(o.t, slot) : null; if (u) ents.set(u.id, e); // claim now, animate after the coins land
@@ -922,6 +1118,10 @@
         if (o.t) {
           Object.assign(e, { bob: 0, side: 0 }, run.pvp && run.who ? COL[1] : {}); tw(.4, k => { e.lift = .5 * (1 - k); e.sc = lerp(.85, 1, k); e.yaw = lerp(e.yaw % 6.2832, Math.PI, k); });
           hop(e, TP(slot), .45, 1.1).then(() => land(e, slot));
+        } else if (o.gear) {
+          const to = rackPos(run.rack.length - 1);
+          tw(.5, k => { const q = k * k * (3 - 2 * k); e.p[0] = lerp(o.ped.p[0], to[0], q); e.p[2] = lerp(o.ped.p[2], to[2], q); e.lift = .5 + Math.sin(k * 3.14) * 1.2; })
+            .then(() => { all.delete(e); showRack(); gsel = run.rack.length - 1; sfx.land(); }); // picked up and ready: next click on a piece puts it on
         } else {
           all.delete(e); const s = addRelic(o.rel); if (o.rel === 'coupon') shop && shop.offers.forEach(q => { if (!q.sold) q.price = Math.max(1, q.price - 1); }); s.sca = 0; const to = s.p.slice(); s.p[0] = e.p[0]; s.p[1] = .5; s.p[2] = e.p[2];
           tw(.5, k => { const q = k * k * (3 - 2 * k); s.p[0] = lerp(e.p[0], to[0], q); s.p[2] = lerp(e.p[2], to[2], q); s.p[1] = lerp(.5, to[1], q) + Math.sin(k * 3.14) * 1.2; }).then(() => { s.sqv -= 8; s.flash = 1; sfx.land(); });
@@ -930,8 +1130,13 @@
     });
   }
   function shopClick(i) {
-    const o = shop.offers.find(o => o.i === i && !o.sold); if (o) { deselect(); return buy(o); }
+    const o = shop.offers.find(o => o.i === i && !o.sold); if (o) { deselect(); gsel = -1; return buy(o); }
     const at = s => run.army.find(u => u.slot === s);
+    if (i >= 200) { // a wearable on the rack: pick it up (or put it back down)
+      if (sel != null) { const u = at(sel); if (u) ents.get(u.id).wob = 0; sel = null; }
+      gsel = gsel === i - 200 ? -1 : i - 200; sfx.sel(); const e = rackE[i - 200]; if (e) e.sqv += 6; return;
+    }
+    if (gsel >= 0) { const j = gsel; gsel = -1; if (i >= 0 && i < 12 && at(i)) { equip(j, i); return; } sfx.click(); return; }
     if (sel != null && i >= 0 && i < 12 && i !== sel) {
       const a = at(sel), b = at(i); a.slot = i; hop(ents.get(a.id), TP(i), .25, .5).then(() => land(ents.get(a.id), i));
       if (b) { b.slot = sel; hop(ents.get(b.id), TP(sel), .25, .3); }
@@ -942,11 +1147,13 @@
   }
   function go() {
     if (phase !== 'shop') return;
+    gsel = -1;
     if (sel != null) { const u = run.army.find(u => u.slot === sel); if (u) ents.get(u.id).wob = 0; sel = null; }
     for (const o of shop.offers) if (!o.sold) { o.busy = true; suck(o.item); wait(.15).then(() => sink(o.ped)); }
     shop = null; sfx.click();
     if (run.pvp) return run.who ? pvpBattle() : pvpShop(1);
-    run.round++; nextFight(); hud();
+    if (run.retry) run.retry = false; else run.round++; // phoenix on the final fight: fight it again
+    nextFight(); hud();
   }
   $('#go').onclick = go;
   $('#sell').onclick = sell;
@@ -980,6 +1187,7 @@
   function pickTile() {
     const r = gfx.ray(mouse.nx, mouse.ny);
     if (shop) for (const o of shop.offers) if (!o.sold && rayDist(r, [o.ped.p[0], .75, o.ped.p[2]]) < .42) return o.i;
+    if (shop) for (let j = 0; j < rackE.length; j++) if (rayDist(r, [rackE[j].p[0], .4, rackE[j].p[2]]) < .42) return 200 + j;
     if (choice) for (const o of choice.opts) if (rayDist(r, [o.p[0], .75, o.p[2]]) < .45) return o.i;
     const occ = i => B ? B.st.b[i] : run.army.some(u => u.slot === i);
     const [hx, hz] = rayPlane(r, .5), t1 = tileAt(hx, hz);
@@ -1019,13 +1227,15 @@
   });
   cv.addEventListener('pointerup', e => { // drag & drop
     setMouse(e);
-    if (hover < 0 || hover === downTile || sel == null) return;
+    if (hover < 0 || hover === downTile) return;
+    if (phase === 'shop' && gsel >= 0 && downTile >= 200 && hover < 12) return click(hover); // gear dragged off the rack onto a piece
+    if (sel == null) return;
     if ((phase === 'player' && selMoves.some(m => m.t === hover)) || (phase === 'shop' && hover < 12)) click(hover);
   });
   function pieceTip(i) { // name, plus anything special about this one (no description)
     let p;
     if (B) { p = B.st.b[i]; if (p && B.vis && !B.vis[i] && p.s === 1 && p.t !== 'K') return null; }
-    else { const u = run.army.find(u => u.slot === i); p = u && { t: u.t, s: 0 }; }
+    else { const u = run.army.find(u => u.slot === i); p = u && { t: u.t, s: 0, g: u.gear }; }
     if (!p) return null;
     const boss = B && B.boss && p.s === 1 && p.t === 'K';
     const name = boss ? B.boss.toUpperCase() : NAMES[p.t][0], tags = [];
@@ -1033,17 +1243,21 @@
     if (B && B.st.fz && B.st.fz[i] && p.t !== 'K') tags.push('<em class="ice">FROZEN</em>');
     if (p.hp > 1) tags.push('<em>' + p.hp + ' HP</em>');
     if (p.kills) tags.push('<em>+' + p.kills + ' RANGE</em>');
+    if (p.wd) tags.push('<em>WARDED</em>');
+    if (p.g) tags.push('<em class="gear">' + GEAR[p.g][1] + '</em>');
     return [(B && B.pvp ? '<s>P' + (p.s + 1) + '</s> ' : p.s ? '<s>FOE</s> ' : '') + name, tags.join(' ')];
   }
   function tip() {
     const el = $('#tip'); let t = null;
     if (choice && phase === 'choose' && hover >= 100) {
       const o = choice.opts[hover - 100], ts = [...new Set(o.foes.map(f => f.t).filter(t => t !== 'K' && t !== 'P'))];
-      t = [['EASY', 'MEDIUM', 'HARD'][o.k], ts.map(t => NAMES[t][0]).join(' · ') || 'PAWNS'];
+      const extra = (o.foes.rel.length ? '<br><em>' + o.foes.rel.map(k => RELICS[k][1]).join(' · ') + '</em>' : '') + (o.foes.some(f => f.g) ? ' <em class="gear">' + o.foes.filter(f => f.g).length + ' GEAR</em>' : '');
+      t = [['EASY', 'MEDIUM', 'HARD'][o.k], (ts.map(t => NAMES[t][0]).join(' · ') || 'PAWNS') + extra];
     } else if (run && (phase === 'shop' || phase === 'player')) {
       const r = gfx.ray(mouse.nx, mouse.ny);
-      for (const s of shelf) if (rayDist(r, [s.e.p[0], s.e.p[1] + .3, s.e.p[2]]) < .4) t = RELICS[s.k].slice(1);
-      const o = shop && shop.offers.find(o => o.i === hover && !o.sold); if (o) t = o.rel ? RELICS[o.rel].slice(1) : [NAMES[o.t][0]];
+      for (const s of shelf) if (rayDist(r, [s.e.p[0], s.e.p[1] + .3, s.e.p[2]]) < .4) t = s.far && B && !B.pvp ? ['<s>FOE</s> ' + RELICS[s.k][1], RELICS[s.k][2]] : RELICS[s.k].slice(1);
+      if (hover >= 200) { const k = run.rack[hover - 200]; if (k) t = [GEAR[k][1], GEAR[k][2] + '<br><em>drag onto a piece</em>']; }
+      const o = shop && shop.offers.find(o => o.i === hover && !o.sold); if (o) t = o.rel ? RELICS[o.rel].slice(1) : o.gear ? GEAR[o.gear].slice(1) : [NAMES[o.t][0]];
       if (!t && hover >= 0 && hover < 36) t = pieceTip(hover);
     }
     if (!t) { el.style.display = 'none'; return; }
@@ -1060,6 +1274,9 @@
       if (lastMv && (!vis || vis[lastMv.t])) { set(lastMv.f, 3, C.last); set(lastMv.t, 3, C.last); }
       if (B.boss === 'hive' && B.hiveAt >= 0 && B.timer === 1) set(B.hiveAt, 3, C.hive);
       if (B.boss === 'tempest' && B.timer === 1) for (const i of edge(B.wind)) set(i, 3, C.wind);
+      if (B.boss === 'siege') for (const i of B.line) if (!tileK[i]) set(i, B.timer === 1 ? 3 : 2, C.shell);
+      if (B.boss === 'collapse' && B.timer === 1) for (const i of B.crack) set(i, 3, C.crumble);
+      if (B.boss === 'necro') for (const g of B.graves) if (!tileK[g.i]) set(g.i, g.n <= 1 ? 3 : 2, C.grave);
       if (peek != null) for (const m of peekMoves) set(m.t, m.k && m.k !== 5 ? 3 : 2, C.foe);
       if (sel != null) { set(sel, 1, C.sel); for (const m of selMoves) { const k = m.k && m.k !== 5 && !hid(m.t); set(m.t, k ? 3 : 2, k ? C.cap : m.k === 5 ? C.ice : m.d ? C.danger : C.move); } }
       if (sel == null && phase === 'player' && hover >= 0 && hover < 36) { // threat preview
@@ -1080,6 +1297,7 @@
     } else if (shop && phase === 'shop') {
       for (const o of shop.offers) if (!o.sold) set(o.i, hover === o.i ? 1 : 3, run.gold >= o.price ? C.gold : C.no);
       if (sel != null) { for (let i = 0; i < 12; i++) set(i, 2, C.move); set(sel, 1, C.sel); }
+      if (gsel >= 0) for (const u of run.army) set(u.slot, 3, C.ice); // where the picked-up gear can go
     }
     for (let i = 0; i < 36; i++) if (blastT[i] > 0) set(i, 20 + Math.min(1, blastT[i]), C.cap);
     if (choice && choice.prev >= 0) for (const f of choice.opts[choice.prev].foes) set(f.i, 1, C.foe);
@@ -1137,7 +1355,8 @@
     const rdt = Math.min(.05, (ms - last) / 1000 || 0); last = ms;
     if (tsReal > 0) { tsReal -= rdt; if (tsReal <= 0) tscale = 1; }
     const dt = rdt * tscale; time += dt;
-    for (let i = tweens.length - 1; i >= 0; i--) { const t = tweens[i]; t.t += dt; const k = Math.min(1, t.t / t.d); t.fn(k); if (k >= 1) { tweens.splice(tweens.indexOf(t), 1); t.res(); } }
+    for (let n = 0; n < SPEED; n++) // ?speed=N (testing): game time runs N times faster; everything timed goes through tweens
+      for (let i = tweens.length - 1; i >= 0; i--) { const t = tweens[i]; if (!t) continue; t.t += dt; const k = Math.min(1, t.t / t.d); t.fn(k); if (k >= 1) { tweens.splice(tweens.indexOf(t), 1); t.res(); } }
     if (theme === TH.chaos) { TH.chaos.glow = hsv(time * .15 % 1, .75, 1); TH.chaos.skyB = hsv((time * .15 + .5) % 1, .7, .42); }
     for (const k in cur) for (let i = 0; i < 3; i++) cur[k][i] += (theme[k][i] - cur[k][i]) * Math.min(1, rdt * 2.5);
     shake *= Math.exp(-rdt * 8); punch *= Math.exp(-rdt * 7); sflash *= Math.exp(-rdt * 9);
@@ -1155,7 +1374,8 @@
       if (!e.rag && Math.max(e.sca, e.fv || 0) < .6 && nsh < 40 && Math.abs(e.p[0]) < 3.2) { shBuf[nsh * 4] = e.p[0]; shBuf[nsh * 4 + 1] = e.p[2]; shBuf[nsh * 4 + 2] = .42 * e.sc; shBuf[nsh * 4 + 3] = .6 * (1 - e.sca) * clamp(1 - (e.p[1] + e.lift) * .6, .2, 1); nsh++; }
     }
     const np = updParticles(dt);
-    shopFx(dt); bossFx(dt); glows();
+    shopFx(dt); bossFx(dt); syncGear(); glows();
+    for (let i = 0; i < 36; i++) { holeY[i] = lerp(holeY[i], B && B.st.hole && B.st.hole[i] ? -5 : 0, Math.min(1, dt * (holeY[i] < -.5 ? 1.6 : 3))); tile[i * 4 + 3] += holeY[i]; }
     envBones.fill(0);
     for (let b = 0; b < 8; b++) { const o = b * 16; envBones[o] = envBones[o + 5] = envBones[o + 10] = envBones[o + 15] = 1; envBones[o + 13] = b === 0 ? 0 : b < 5 ? Math.sin(time * 1.6 + b * 1.7) * .06 : Math.sin(time * .5 + b * 2.1) * .3; }
     gfx.begin({ sun: cur.sun, amb: cur.amb, glow: cur.glow, time, tile, tileK, sh: shBuf, nsh });
@@ -1164,11 +1384,14 @@
     gfx.particles(pdata, np);
     gfx.end({ skyA: cur.skyA, skyB: cur.skyB, time, flash: sflash, gray, fade: 1 });
     labels(); tip(); sellBtn();
-    if (Q.has('demo') && (demoT -= rdt) < 0) { // self-playing mode for testing
+    if (Q.has('demo') && (demoT -= rdt * SPEED) < 0) { // self-playing mode for testing
       demoT = .35;
       if (phase === 'title') Q.get('demo') === 'pvp' ? pvpStart() : regularStart(); // ?demo=pvp plays both sides of a match
       else if (phase === 'player') { const m = R.best(B.st, 2); if (m) playerMove(m); }
-      else if (phase === 'shop') { const o = shop.offers.find(o => !o.sold && run.gold >= o.price && (o.rel || freeSlot(o.t) >= 0)); if (o) buy(o); else go(); }
+      else if (phase === 'shop') {
+        const bare = run.army.find(u => !u.gear && u.t !== 'K'), o = shop.offers.find(o => !o.sold && run.gold >= o.price && (o.rel || (o.gear ? run.rack.length < RACK : freeSlot(o.t) >= 0)));
+        if (run.rack.length && bare) equip(0, bare.slot); else if (o) buy(o); else go();
+      }
       else if (phase === 'choose') choose(pick(choice.opts));
       else if (phase === 'lever') leverGo && leverGo();
       else if (phase === 'over') newRun();
@@ -1180,8 +1403,9 @@
   const t0 = performance.now(), defs = S.models();
   let seed = 1, total = 0; const LO = Q.has('lo') ? .12 : 1;
   for (const k in defs) {
-    const s = S.sample(defs[k], LO * (k === 'boss' ? 4200 : k === 'ped' ? 1600 : RELICS[k] ? 1500 : 3000) | 0, seed++);
-    gfx.model(k, s); MD[k] = { cent: s.cent, nb: s.nb }; total += s.n;
+    const s = S.sample(defs[k], LO * (k === 'boss' ? 4200 : k === 'ped' ? 1600 : RELICS[k] || GEAR[k] ? 1500 : 3000) | 0, seed++);
+    let top = 0; for (let i = 1; i < s.data.length; i += S.STRIDE) top = Math.max(top, s.data[i]);
+    gfx.model(k, s); MD[k] = { cent: s.cent, nb: s.nb, top }; total += s.n;
   }
   const env = S.env(LO); gfx.model('env', env);
   console.log('splats: env', env.n, 'models', total, 'in', (performance.now() - t0) | 0, 'ms');
@@ -1189,7 +1413,7 @@
   const portraits = {}, pcv = document.createElement('canvas');
   CL.portrait = (m, dark) => {
     const key = m + (dark ? '-' : ''); if (portraits[key]) return portraits[key];
-    const c = gfx.cam, save = { pos: c.pos, tgt: c.tgt }, rel = !!RELICS[m], S = 64, h = cv.height;
+    const c = gfx.cam, save = { pos: c.pos, tgt: c.tgt }, rel = !!(RELICS[m] || GEAR[m]), S = 64, h = cv.height;
     const span = rel ? .75 : 1.3, d = h * span / S / (2 * Math.tan(c.fov / 2)), ty_ = rel ? .3 : .55; // distance so the model fills an S-px crop
     c.pos = [0, ty_ + d * .38, d * .92]; c.tgt = [0, ty_, 0];
     const e = new Ent(m, [0, 0, 0]); e.yaw = rel ? .4 : Math.PI + .5; e.ph = 0;
@@ -1218,6 +1442,7 @@
       B.st.b.fill(null);
       for (const [t, i, s] of list) { const id = uid++; B.st.b[i] = { id, t, s, hp: R.hpOf(t) }; ents.set(id, mkEnt(MODEL[t], TP(i), { side: s, yaw: s ? 0 : Math.PI, A: s ? EA : PA, B: s ? EB : PB, king: t === 'K' })); }
     },
+    fn: { bossTick, equip, sell, win, lose, genEnemy, power, enterShop, buy, go }, // internals, for scripted tests
     async act(f, t) { const m = R.moves(B.st, f).find(m => m.t === t); if (!m) return 'no move'; const ev = []; R.apply(B.st, m, ev); B.st.turn = 0; B.st.again = null; await play(ev); return ev.map(e => e.e).join(','); },
   };
   newRun();

@@ -1,4 +1,4 @@
-// Bestiary: every piece and relic, unlocked once seen in a run. Movement diagrams come straight from the rules,
+// Bestiary: every piece, relic and wearable, unlocked once seen in a run (wearables share the relics' seen list). Movement diagrams come straight from the rules,
 // portraits are rendered by the game's own renderer (CL.portrait).
 (function (G) {
   'use strict';
@@ -34,14 +34,14 @@
   let tab = 'p';
   function render() {
     const D = G.data, el = document.getElementById('codex');
-    const keys = tab === 'p' ? ORDER : Object.keys(D.RELICS), n = keys.filter(k => seen[tab][k]).length;
+    const kind = tab === 'p' ? 'p' : 'r', keys = tab === 'p' ? ORDER : Object.keys(tab === 'g' ? D.GEAR : D.RELICS), n = keys.filter(k => seen[kind][k]).length;
     let h = '<div class="cx-head"><h2>BESTIARY</h2>' +
-      '<div class="cx-tabs"><button data-tab="p" class="' + (tab === 'p' ? 'on' : '') + '">PIECES</button><button data-tab="r" class="' + (tab === 'r' ? 'on' : '') + '">RELICS</button></div>' +
-      '<div class="cx-prog">' + keys.map(k => '<i class="' + (seen[tab][k] ? 'on' : '') + '"></i>').join('') + '<span>' + n + '/' + keys.length + '</span></div>' +
+      '<div class="cx-tabs"><button data-tab="p" class="' + (tab === 'p' ? 'on' : '') + '">PIECES</button><button data-tab="r" class="' + (tab === 'r' ? 'on' : '') + '">RELICS</button><button data-tab="g" class="' + (tab === 'g' ? 'on' : '') + '">GEAR</button></div>' +
+      '<div class="cx-prog">' + keys.map(k => '<i class="' + (seen[kind][k] ? 'on' : '') + '"></i>').join('') + '<span>' + n + '/' + keys.length + '</span></div>' +
       '<button class="cx-x" data-x="1">&#10005;</button></div>';
     h += '<div class="cx-grid ' + (tab === 'p' ? 'pc' : 'rl') + '">';
     keys.forEach((k, idx) => {
-      const ok = seen[tab][k], d = 'style="--d:' + idx * 35 + 'ms"';
+      const ok = seen[kind][k], d = 'style="--d:' + idx * 35 + 'ms"';
       if (tab === 'p') {
         const [name, desc] = D.NAMES[k], price = D.PRICE[k];
         h += '<div class="card' + (ok ? '' : ' unk') + '" ' + d + '><div class="pic">' + pic(D.MODEL[k], !ok) +
@@ -49,7 +49,7 @@
           (ok ? diagram(k) : '<div class="dg q">?</div>') +
           '<div class="plate"><b>' + (ok ? name : '???') + '</b><span>' + (ok ? desc : 'not yet seen') + '</span></div></div>';
       } else {
-        const [price, name, desc] = D.RELICS[k];
+        const [price, name, desc] = (tab === 'g' ? D.GEAR : D.RELICS)[k];
         h += '<div class="card' + (ok ? '' : ' unk') + '" ' + d + '><div class="pic">' + pic(k, !ok) +
           (ok ? '<em><i class="coin"></i>' + price + '</em>' : '') + '</div>' +
           '<div class="plate"><b>' + (ok ? name : '???') + '</b><span>' + (ok ? desc : 'not yet seen') + '</span></div></div>';

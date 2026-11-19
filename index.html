@@ -27,6 +27,9 @@
   #track i.done { background: #fff3d6; }
   #track i.boss.done { background: #ff5a4a; }
   #track i.now { background: #ffc83d; animation: blink .7s steps(2) infinite; }
+  #track.long { gap: 14px; } #track.long span { display: flex; gap: 6px; align-items: center; }
+  #track.long i { width: 8px; height: 8px; box-shadow: 0 0 0 2px #120c1c; } #track.long i.boss { width: 11px; height: 11px; margin: 0 3px; }
+  @media (max-width: 520px) { #track.long { gap: 8px; } #track.long span { gap: 3px; } #track.long i { width: 6px; height: 6px; } #track.long i.boss { width: 8px; height: 8px; margin: 0 2px; } }
   #timer { position: absolute; left: 50%; top: 58px; transform: translateX(-50%); font-size: 26px; display: flex; gap: 8px; align-items: center; }
   #timer i { width: 10px; height: 10px; background: #2a2338; box-shadow: 0 0 0 3px #120c1c; }
   #timer i.on { background: #ff5a4a; }
@@ -53,7 +56,7 @@
   #tip b { display: block; font-size: 18px; color: #ffc83d; }
   #tip b s { text-decoration: none; color: #ff5a4a; }
   #tip em { display: inline-block; font-style: normal; font-size: 12px; margin-top: 5px; padding: 1px 5px 2px; background: #3b2f58; color: #fff3d6; }
-  #tip em.stun { background: #c9a035; color: #120c1c; } #tip em.ice { background: #4aa6d6; color: #120c1c; }
+  #tip em.stun { background: #c9a035; color: #120c1c; } #tip em.ice { background: #4aa6d6; color: #120c1c; } #tip em.gear { background: #5a8f6a; color: #120c1c; }
   #err { position: absolute; left: 8px; bottom: 8px; color: #ff6b5a; font: 12px monospace; white-space: pre-wrap; max-width: 90vw; }
   #book { position: absolute; right: 22px; top: 16px; padding: 8px 12px 10px; font-size: 20px; }
   #book i { display: inline-block; width: 16px; height: 20px; background: #c9a35a; box-shadow: inset 4px 0 0 #7a4f2a, inset -3px 0 0 #fff3d6; vertical-align: middle; }
