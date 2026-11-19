@@ -34,7 +34,8 @@
   const ACTS = 4, ROUNDS = ACTS * 3; // every act: two fights, then a boss
   CL.data = { NAMES, PRICE, RELICS, MODEL };
   const seen = t => CL.codex && CL.codex.seen(t), seenRel = k => CL.codex && CL.codex.seenRel(k);
-  const PA = [.97, .92, .8], PB = [.25, .78, .82], EA = [.36, .27, .5], EB = [.98, .36, .32];
+  const PA = [.97, .92, .8], PB = [.25, .78, .82], EA = [.36, .27, .5], EB = [.98, .36, .32], COL = [{ A: PA, B: PB }, { A: EA, B: EB }];
+  const PVP_RELICS = Object.keys(RELICS).filter(k => k !== 'boots' && k !== 'anchor'); // those two only matter against bosses
   const BOSSCOL = { inferno: [[.3, .13, .12], [1, .6, .15]], tempest: [[.2, .32, .42], [.7, 1, 1]], chaos: [[.14, .1, .2], [1, .3, .9]], hive: [[.32, .22, .05], [1, .78, .2]], frost: [[.2, .3, .45], [.7, .95, 1]], eclipse: [[.08, .05, .12], [.8, .35, 1]] };
   const C = { sel: [1, .85, .3], move: [.3, .95, 1], danger: [1, .6, .2], cap: [1, .25, .2], foe: [.85, .3, .7], hover: [1, 1, 1], last: [.7, .4, .9], lava: [1, .5, .1], wind: [.8, 1, 1], gold: [1, .8, .3], no: [.5, .3, .35], ice: [.3, .75, 1], hive: [1, .75, .2], fog: [.04, .03, .08] };
   const TH = {
@@ -54,7 +55,9 @@
   let phase = 'title', run, B = null, shop = null, choice = null, sel = null, selMoves = [], peek = null, peekMoves = [], hover = -1, lastMv = null, uid = 1;
   let time = 0, tscale = 1, tsReal = 0, shake = 0, punch = 0, sflash = 0, gray = 0, last = 0, demoT = 1;
   let view = 0, camYaw = 0; // pvp: which side the camera looks from (swings round to face whoever moves)
-  const PVP_GOLD = +(Q.get('pvpg') || 25), PVP_POOL = ['P', 'P', ...Object.keys(PRICE).filter(t => t !== 'P')];
+  // pvp: starting budget, round wins needed, gold both players get between rounds (+ a catch-up bonus for the round's loser)
+  const PVP_GOLD = +(Q.get('pvpg') || 25), PVP_WINS = +(Q.get('pvpw') || 3), PVP_INCOME = 8, PVP_CATCHUP = 3;
+  const PVP_POOL = ['P', 'P', ...Object.keys(PRICE).filter(t => t !== 'P')];
   const ents = new Map(), all = new Set(), shelf = [], MD = {};
   const blastT = new Float32Array(36), tile = new Float32Array(144), tileK = new Float32Array(36), ty = new Float32Array(36), tv = new Float32Array(36), shBuf = new Float32Array(160);
   const envBones = new Float32Array(128), mouse = { x: 0, y: 0, nx: 0, ny: 0 };
@@ -208,7 +211,8 @@
     burst([v.p[0], .45, v.p[2]], v.A, 24, 4.5); burst([v.p[0], .45, v.p[2]], v.B, 14, 5.5);
     shake = Math.max(shake, v.king ? .8 : .35); punch = 1; sflash = Math.max(sflash, .12); sfx.cap();
     if (v.king) { tscale = .2; tsReal = .9; } else hitstop();
-    if (v.side === 1 && B && !B.pvp) coins(v.p, 1 + (run.relics.includes('purse') ? 1 : 0));
+    if (B && B.pvp) { const P = run.P[1 - v.side]; if (P.relics.includes('purse')) { P.gold++; flashRelic('purse', 1 - v.side); } } // banked for the next shop
+    else if (v.side === 1 && B) coins(v.p, 1 + (run.relics.includes('purse') ? 1 : 0));
   }
   function hurt(v) { // a tough piece survives a hit: golems lose an arm and keep shedding dust
     if (!v) return;
@@ -249,12 +253,12 @@
   function hud() {
     $('#gold span').textContent = run.gold;
     $('#gold').style.display = run.pvp && B ? 'none' : '';
-    $('#pvp').classList.toggle('on', phase === 'title');
+    $('#modes').classList.toggle('on', phase === 'title');
     let t = '';
-    if (run.pvp) { // whose draft / whose move
-      $('#track').innerHTML = '';
+    if (run.pvp) { // round wins, then whose shop / whose move
+      $('#track').innerHTML = [0, 1].map(s => Array.from({ length: PVP_WINS }, (_, k) => `<i class="p${s + 1}${k < run.wins[s] ? ' done' : ''}"></i>`).join('')).join('<b>VS</b>');
       const w = B ? B.st.turn : run.who;
-      if (phase !== 'over') t = `<b class="p${w + 1}">P${w + 1} ${B ? 'TO MOVE' : 'DRAFT'}</b>`;
+      if (phase !== 'over') t = `<b class="p${w + 1}">P${w + 1} ${B ? 'TO MOVE' : run.round ? 'SHOP' : 'DRAFT'}</b>`;
     } else {
       $('#track').innerHTML = Array.from({ length: ROUNDS }, (_, i) => `<i class="${i % 3 === 2 ? 'boss ' : ''}${i < run.round ? 'done' : i === run.round ? 'now' : ''}"></i>`).join('');
       if (B && (B.boss === 'tempest' || B.boss === 'chaos' || B.boss === 'hive')) {
@@ -293,7 +297,7 @@
   }
   function addUnit(t, slot) { const u = { t, slot, id: uid++ }; run.army.push(u); seen(t); return u; }
   function unitEnt(u, pop) {
-    const e = mkEnt(MODEL[u.t], TP(u.slot), { side: 0, yaw: Math.PI, king: u.t === 'K', ...(run.pvp && run.who ? { A: EA, B: EB } : {}) });
+    const e = mkEnt(MODEL[u.t], TP(u.slot), { side: 0, yaw: Math.PI, king: u.t === 'K', ...(run.pvp && run.who ? COL[1] : {}) });
     ents.set(u.id, e); if (pop) appear(e); return e;
   }
   function newRun() {
@@ -306,8 +310,14 @@
     (Q.get('relics') || '').split(',').filter(k => RELICS[k]).forEach(addRelic);
     (Q.get('army') || '').split('').filter(t => PRICE[t]).forEach(t => { const s = freeSlot(t); if (s >= 0) unitEnt(addUnit(t, s), true); });
     theme = TH['a' + Math.min(ACTS - 1, (run.round / 3) | 0)];
-    phase = 'title'; hud(); splash('CHESSLITE', 'show', '&#9654;');
+    phase = 'title'; hud(); splash('CHESSLITE', 'show');
   }
+  function regularStart() {
+    if (phase !== 'title') return;
+    sfx.init(); splash(null); sfx.click(); $('#modes').classList.remove('on');
+    run.spun ? nextFight() : spin();
+  }
+  $('#regular').onclick = regularStart;
   let leverGo = null, rainbowT = 0;
   function fountain(p, n, dur) { // coins spraying up out of a point for a while
     for (let k = 0; k < n; k++) wait(rand(dur)).then(() => spark(p[0] + rand(-.2, .2), .6, p[2] + rand(-.2, .2), rand(-2, 2), rand(6, 10), rand(-2, 2), [1, rand(.7, .9), .25], rand(.07, .11), rand(.9, 1.4), { g: 14 }));
@@ -384,11 +394,14 @@
     const ord = t === 'P' ? [8, 9, 7, 10, 6, 11, 2, 3, 1, 4, 0, 5] : [2, 3, 1, 4, 0, 5, 8, 9, 7, 10, 6, 11];
     const s = ord.find(i => !used.has(i)); return s === undefined ? -1 : s;
   }
-  function addRelic(k) {
-    run.relics.push(k); seenRel(k);
-    const n = shelf.length, e = mkEnt(k, [-4 - (n > 5 ? .8 : 0), .15, 2.4 - (n % 6) * .8], { sc: .85, spin: .8, bob: .06 });
-    shelf.push({ k, e }); appear(e); return e;
+  function addRelic(k) { run.relics.push(k); seenRel(k); return shelfAdd(k, run.pvp ? run.who : 0, false); }
+  // relic shelf beside the board; s = owner (for flashRelic), far = P2's shelf on the other side in a pvp battle
+  function shelfAdd(k, s, far) {
+    const n = shelf.filter(x => x.far === far).length, x = 4 + (n > 5 ? .8 : 0), z = 2.4 - (n % 6) * .8;
+    const e = mkEnt(k, far ? [x, .15, -z] : [-x, .15, z], { sc: .85, spin: .8, bob: .06 });
+    shelf.push({ k, e, s, far }); appear(e); return e;
   }
+  function showShelf(list) { for (const x of shelf) vanish(x.e); shelf.length = 0; for (const [k, s, far] of list) shelfAdd(k, s, far); }
 
   const BUDGET = [4, 7, 11, 13, 17, 22, 22, 27, 34, 30, 36, 44];
   function genEnemy(r, o = {}) {
@@ -409,48 +422,79 @@
   }
 
   // ------------------------------------------------------------ pvp (hotseat)
-  // Each player blind-drafts an army from the same gold budget (pieces only: relics are wired to side 0 in the rules),
-  // then they fight on one screen. P2's army is rotated 180 degrees onto the far side; the camera swings to face the mover.
+  // First to PVP_WINS round wins. Each player keeps their own army, relics and gold (run.army / run.gold / run.relics
+  // point at whoever is shopping), blind-drafts in turn, and gets a shop between rounds. P2's army is rotated 180
+  // degrees onto the far side; the camera swings to face whoever moves. Who moves first alternates each round.
   function pvpStart() {
     if (phase !== 'title') return;
-    sfx.init(); sfx.click(); splash(null); clearAll();
-    run = { pvp: true, who: 0, gold: 0, round: 0, relics: [], army: [], bosses: [] };
-    pvpDraft(0);
+    sfx.init(); sfx.click(); splash(null); clearAll(); $('#modes').classList.remove('on');
+    run = { pvp: true, who: 0, round: 0, wins: [0, 0], bosses: [], P: [0, 1].map(() => ({ gold: PVP_GOLD, relics: [], army: [{ t: 'K', slot: 2, id: uid++ }] })) };
+    for (const k of ['gold', 'army', 'relics']) Object.defineProperty(run, k, { get: () => run.P[run.who][k], set: v => { run.P[run.who][k] = v; } });
+    pvpShop(0);
   }
-  async function pvpDraft(who) {
-    phase = 'anim'; sel = null; view = 0;
+  const score = () => run.wins[0] + ' &ndash; ' + run.wins[1];
+  async function pvpShop(who) {
+    phase = 'anim'; B = null; sel = peek = lastMv = null; selMoves = []; view = 0;
     for (const [id, e] of [...ents]) { ents.delete(id); vanish(e); }
-    if (who) run.p1 = run.army;
-    run.who = who; run.army = []; run.gold = PVP_GOLD;
+    run.who = who; showShelf(run.relics.map(k => [k, who, false]));
     theme = TH[who ? 'a2' : 'a0']; hud();
-    splash('PLAYER ' + (who + 1), 'flash', who ? 'P1, no peeking' : 'draft your army'); sfx.boss();
+    splash('PLAYER ' + (who + 1), 'flash', who ? 'P1, no peeking' : run.round ? 'P2, no peeking' : 'draft your army'); sfx.boss();
     await wait(1.5);
-    addUnit('K', 2); enterShop();
+    enterShop();
   }
   async function pvpBattle() {
     phase = 'anim'; sel = peek = lastMv = null; selMoves = []; view = 0;
-    const p2 = run.army;
     for (const [id, e] of [...ents]) { ents.delete(id); vanish(e); }
     theme = TH.a1;
-    const st = R.state();
+    const st = R.state(), has = s => k => run.P[s].relics.includes(k);
     B = { st, pvp: true, boss: null, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: 2, bonus: 0 };
+    showShelf([0, 1].flatMap(s => run.P[s].relics.map(k => [k, s, !!s])));
     hud(); await wait(.4);
-    for (const [s, army] of [[0, run.p1], [1, p2]]) for (const u of army) {
-      const i = s ? 35 - u.slot : u.slot, id = uid++;
-      st.b[i] = { id, t: u.t, s, hp: R.hpOf(u.t) };
-      const e = mkEnt(MODEL[u.t], TP(i), { side: s, yaw: s ? 0 : Math.PI, A: s ? EA : PA, B: s ? EB : PB, king: u.t === 'K' });
-      ents.set(id, e); appear(e); sfx.pop(); tv[i] -= 1; await wait(.05);
+    for (const s of [0, 1]) {
+      st.f[s] = flags(has(s));
+      for (const u of run.P[s].army) {
+        const i = s ? 35 - u.slot : u.slot, id = uid++;
+        st.b[i] = { id, t: u.t, s, hp: u.t === 'K' && has(s)('heart') ? 2 : R.hpOf(u.t) };
+        const e = mkEnt(MODEL[u.t], TP(i), { side: s, yaw: s ? 0 : Math.PI, ...COL[s], king: u.t === 'K' });
+        ents.set(id, e); appear(e); sfx.pop(); tv[i] -= 1; await wait(.05);
+      }
     }
-    await wait(.3); splash('FIGHT', 'flash'); sfx.boss(); shake = .4; await wait(.9);
-    phase = 'player'; hud();
+    await wait(.3); splash('ROUND ' + (run.round + 1), 'flash', score()); sfx.boss(); shake = .4; await wait(1.3);
+    for (const s of [0, 1]) await prefight(st, s, has(s));
+    st.turn = run.round % 2;
+    if (await checkEnd()) return;
+    return pvpNext();
   }
   async function pvpNext() {
     const st = B.st;
-    if (!R.all(st, st.turn).length) { // nothing can move: skip the turn; both stuck is a draw
+    if (st.again != null) { // fury: the capturing piece may go again (tap anywhere else to decline)
+      const i = st.b.findIndex(p => p && p.id === st.again);
+      if (i >= 0 && R.moves(st, i).length) { flashRelic('frenzy', st.turn); phase = 'player'; hud(); select(i); return; }
       R.pass(st);
-      if (!R.all(st, st.turn).length) { phase = 'over'; hud(); splash('DRAW', 'show', '&#9654;'); return; }
     }
+    const k = R.status(st);
+    if (k === 1) return mate();
+    if (k === 2) { await announce('STALEMATE', 'nobody scores'); return pvpRoundEnd(-1); }
     await wait(.2); view = st.turn; hud(); phase = 'player';
+  }
+  async function pvpRoundEnd(w) {
+    phase = 'anim'; deselect(); peek = null; lastMv = null;
+    if (w >= 0) run.wins[w]++;
+    hud();
+    if (w >= 0 && run.wins[w] >= PVP_WINS) {
+      sfx.win(); view = w; phase = 'over'; hud();
+      splash('PLAYER ' + (w + 1), 'show', 'wins the match ' + score() + ' &#9654;'); confetti(160); wait(.4).then(() => confetti(120));
+      return;
+    }
+    if (w >= 0) { sfx.win(); view = w; splash('P' + (w + 1) + ' SCORES', 'flash', score()); confetti(90); }
+    else splash('DRAW', 'flash', score());
+    await wait(2);
+    for (const s of [0, 1]) { // income for the next shop
+      const P = run.P[s], has = k => P.relics.includes(k);
+      P.gold += PVP_INCOME + (w >= 0 && s !== w ? PVP_CATCHUP : 0) + (s === w && has('goblet') ? 3 : 0) + (has('piggy') ? Math.min(5, (P.gold / 5) | 0) : 0);
+    }
+    run.round++;
+    pvpShop(0);
   }
   $('#pvp').onclick = pvpStart;
 
@@ -497,7 +541,7 @@
     theme = TH[boss || 'a' + ((r / 3) | 0)];
     const st = R.state();
     for (const u of run.army) st.b[u.slot] = { id: u.id, t: u.t, s: 0, hp: u.t === 'K' && has('heart') ? 2 : R.hpOf(u.t) };
-    st.f = { shield: has('shield') ? 1 : 0, crown: has('crown'), wings: has('wings'), frenzy: has('frenzy'), thorns: has('thorns'), fuse: has('fuse'), scope: has('scope'), saddle: has('saddle'), medal: has('medal') };
+    st.f[0] = flags(has);
     B = { st, boss, n: 0, marks: [], ice: [], hiveAt: -1, vis: null, wind: [1, 0], timer: 2, bonus: opt ? opt.gold : 0 };
     hud();
     for (const f of opt ? opt.foes : genEnemy(r)) {
@@ -509,23 +553,7 @@
     }
     await wait(.3);
     if (boss) { splash(boss.toUpperCase(), 'flash', BOSSDESC[boss]); sfx.boss(); shake = .6; await wait(1.4); }
-    if (has('egg')) {
-      const i = [8, 9, 7, 10, 6, 11, 2, 3, 1, 4, 0, 5].find(i => !st.b[i]);
-      if (i !== undefined) { const id = uid++; st.b[i] = { id, t: 'P', s: 0 }; const e = mkEnt('pawn', TP(i), { side: 0, yaw: Math.PI }); ents.set(id, e); appear(e); sfx.pop(); flashRelic('egg'); await wait(.3); }
-    }
-    if (has('horn')) { // pawns march one row forward before the fight
-      const hops = [];
-      for (let i = 11; i >= 0; i--) { const p = st.b[i]; if (p && p.s === 0 && p.t === 'P' && !st.b[i + 6]) { st.b[i + 6] = p; st.b[i] = null; const e = ents.get(p.id); if (e) hops.push(hop(e, TP(i + 6), .3, .4).then(() => land(e, i + 6))); } }
-      if (hops.length) { flashRelic('horn'); sfx.buy(); await Promise.all(hops); }
-    }
-    if (has('bolt')) {
-      const c = []; st.b.forEach((p, i) => { if (p && p.s === 1 && p.t !== 'K') c.push(i); });
-      if (c.length) { const i = pick(c), ev = [], q = []; flashRelic('bolt'); boltFx(TP(i)); R.kill(st, i, ev, i, q); R.booms(st, ev, q); await play(ev); await wait(.3); }
-    }
-    if (has('scythe')) { // two enemy pawns get reaped before the fight
-      const c = []; st.b.forEach((p, i) => { if (p && p.s === 1 && p.t === 'P') c.push(i); }); c.sort(() => rand() - .5);
-      if (c.length) { const ev = [], q = []; flashRelic('scythe'); for (const i of c.slice(0, 2)) { boltFx(TP(i)); R.kill(st, i, ev, i, q); } R.booms(st, ev, q); await play(ev); await wait(.3); }
-    }
+    await prefight(st, 0, has);
     if (boss === 'inferno') addMarks(3);
     if (boss === 'frost') addIce(3);
     if (boss === 'hive') hivePick();
@@ -534,7 +562,47 @@
     if (await checkEnd()) return;
     phase = 'player';
   }
-  function flashRelic(k) { const s = shelf.find(s => s.k === k); if (s) { s.e.flash = 1; s.e.sqv += 8; } }
+  function flashRelic(k, side = 0) { const s = shelf.find(s => s.k === k && s.s === side); if (s) { s.e.flash = 1; s.e.sqv += 8; } }
+  // relic flags the rules engine reads, for one side
+  const flags = has => ({ shield: has('shield') ? 1 : 0, crown: has('crown'), wings: has('wings'), frenzy: has('frenzy'), thorns: has('thorns'), fuse: has('fuse'), scope: has('scope'), saddle: has('saddle'), medal: has('medal') });
+  // relics that act as a fight starts, for side s (side 1's home rows are mirrored: tile i -> 35 - i, forward is -6)
+  async function prefight(st, s, has) {
+    const o = 1 - s, at = i => s ? 35 - i : i, fwd = s ? -6 : 6;
+    if (has('egg')) {
+      const i = [8, 9, 7, 10, 6, 11, 2, 3, 1, 4, 0, 5].map(at).find(i => !st.b[i]);
+      if (i !== undefined) { const id = uid++; st.b[i] = { id, t: 'P', s }; const e = mkEnt('pawn', TP(i), { side: s, yaw: s ? 0 : Math.PI, ...COL[s] }); ents.set(id, e); appear(e); sfx.pop(); flashRelic('egg', s); await wait(.3); }
+    }
+    if (has('horn')) { // pawns march one row forward before the fight
+      const hops = [];
+      for (let k = 11; k >= 0; k--) { const i = at(k), j = i + fwd, p = st.b[i]; if (p && p.s === s && p.t === 'P' && !st.b[j]) { st.b[j] = p; st.b[i] = null; const e = ents.get(p.id); if (e) hops.push(hop(e, TP(j), .3, .4).then(() => land(e, j))); } }
+      if (hops.length) { flashRelic('horn', s); sfx.buy(); await Promise.all(hops); }
+    }
+    if (has('bolt')) {
+      const c = []; st.b.forEach((p, i) => { if (p && p.s === o && p.t !== 'K') c.push(i); });
+      if (c.length) { const i = pick(c), ev = [], q = []; flashRelic('bolt', s); boltFx(TP(i)); R.kill(st, i, ev, i, q); R.booms(st, ev, q); await play(ev); await wait(.3); }
+    }
+    if (has('scythe')) { // two enemy pawns get reaped before the fight
+      const c = []; st.b.forEach((p, i) => { if (p && p.s === o && p.t === 'P') c.push(i); }); c.sort(() => rand() - .5);
+      if (c.length) { const ev = [], q = []; flashRelic('scythe', s); for (const i of c.slice(0, 2)) { boltFx(TP(i)); R.kill(st, i, ev, i, q); } R.booms(st, ev, q); await play(ev); await wait(.3); }
+    }
+  }
+  async function announce(txt, sub) { splash(txt, 'flash', sub); sfx.boss(); shake = Math.max(shake, .5); sflash = .15; await wait(1.4); }
+  // the side to move is checkmated: shake its king, call it, and end the fight without playing it out
+  async function mate() {
+    const st = B.st, k = st.b.findIndex(p => p && p.t === 'K' && p.s === st.turn), e = k >= 0 && ents.get(st.b[k].id);
+    phase = 'anim'; if (e) { e.wob = 1; e.flash = 1; }
+    await announce('CHECKMATE');
+    if (e) e.wob = 0;
+    st.w = 1 - st.turn; return checkEnd();
+  }
+  // regular mode: is the side to move checkmated? Boss effects land between the AI's move and the player's,
+  // so a net on the boss's king isn't certain in those fights (eclipse only hides tiles, so it's fine).
+  async function mated() {
+    const st = B.st;
+    if (st.turn === 1 && B.boss && B.boss !== 'eclipse') return false;
+    if (R.status(st) !== 1) return false;
+    return mate();
+  }
   function addMarks(n) {
     const free = []; for (let i = 0; i < 36; i++) if (!B.marks.some(m => m.i === i)) free.push(i);
     for (let k = 0; k < n && free.length; k++) B.marks.push({ i: free.splice((Math.random() * free.length) | 0, 1)[0], s: 1 });
@@ -640,6 +708,7 @@
       if (i >= 0 && R.moves(st, i).length) { flashRelic('frenzy'); phase = 'player'; select(i); return; }
       R.pass(st);
     }
+    if (await mated()) return;
     await enemyTurn();
   }
   async function enemyTurn(guard = 0) {
@@ -650,6 +719,7 @@
     if (await checkEnd()) return;
     await bossTick();
     if (await checkEnd()) return;
+    if (await mated()) return;
     if (!R.all(st, 0).length) { // nothing can move (all stuck/frozen): skip the turn
       R.pass(st);
       if (guard > 3 || !R.all(st, 1).length) { st.w = 1; return checkEnd(); }
@@ -660,11 +730,7 @@
   async function checkEnd() {
     const st = B.st; if (st.w < 0) return false;
     await wait(.5);
-    if (B.pvp) {
-      sfx.win(); view = st.w; phase = 'over'; hud();
-      splash('PLAYER ' + (st.w + 1), 'show', 'wins &#9654;'); confetti(160); wait(.4).then(() => confetti(120));
-      return true;
-    }
+    if (B.pvp) { pvpRoundEnd(st.w); return true; }
     if (st.w === 0) await win(); else await lose();
     return true;
   }
@@ -810,11 +876,11 @@
   }
   function roll() {
     const act = Math.min(ACTS - 1, ((run.round + 1) / 3) | 0);
-    const pool = [['P', 'P', 'N', 'B', 'F', 'S', 'M', 'A'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H', 'A', 'W', 'L'], ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W'],
+    let pool = [['P', 'P', 'N', 'B', 'F', 'S', 'M', 'A'], ['P', 'N', 'B', 'R', 'F', 'X', 'S', 'M', 'O', 'H', 'A', 'W', 'L'], ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W'],
       ['N', 'B', 'R', 'Q', 'G', 'C', 'X', 'H', 'O', 'V', 'L', 'W', 'A']][act];
-    const rel = Object.keys(RELICS).filter(k => !run.relics.includes(k)).sort(() => rand() - .5);
-    const offs = run.pvp ? [0, 1, 2, 3].map(() => ({ t: pick(PVP_POOL) }))
-      : [{ t: pick(pool) }, { t: pick(pool) }, rel.length > 1 && rand() < .5 ? { rel: rel[1] } : { t: pick(REELS[0]) }, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
+    if (run.pvp) pool = PVP_POOL;
+    const rel = (run.pvp ? PVP_RELICS : Object.keys(RELICS)).filter(k => !run.relics.includes(k)).sort(() => rand() - .5);
+    const offs = [{ t: pick(pool) }, { t: pick(pool) }, rel.length > 1 && rand() < .5 ? { rel: rel[1] } : { t: pick(run.pvp ? pool : REELS[0]) }, rel.length ? { rel: rel[0] } : { t: pick(pool) }];
     shop.offers = offs.map((o, k) => {
       const i = 19 + k, p = TP(i), ped = mkEnt('ped', p, {}), item = mkEnt(o.rel || MODEL[o.t], p, { lift: .5, spin: 1.2, sc: .85, bob: .05 });
       raise(ped, item, k * .09, i);
@@ -854,7 +920,7 @@
       tw(.32, k => e.lift = .5 + Math.sin(k * 3.14) * .55).then(() => {
         e.spin = 0;
         if (o.t) {
-          Object.assign(e, { bob: 0, side: 0 }, run.pvp && run.who ? { A: EA, B: EB } : {}); tw(.4, k => { e.lift = .5 * (1 - k); e.sc = lerp(.85, 1, k); e.yaw = lerp(e.yaw % 6.2832, Math.PI, k); });
+          Object.assign(e, { bob: 0, side: 0 }, run.pvp && run.who ? COL[1] : {}); tw(.4, k => { e.lift = .5 * (1 - k); e.sc = lerp(.85, 1, k); e.yaw = lerp(e.yaw % 6.2832, Math.PI, k); });
           hop(e, TP(slot), .45, 1.1).then(() => land(e, slot));
         } else {
           all.delete(e); const s = addRelic(o.rel); if (o.rel === 'coupon') shop && shop.offers.forEach(q => { if (!q.sold) q.price = Math.max(1, q.price - 1); }); s.sca = 0; const to = s.p.slice(); s.p[0] = e.p[0]; s.p[1] = .5; s.p[2] = e.p[2];
@@ -879,7 +945,7 @@
     if (sel != null) { const u = run.army.find(u => u.slot === sel); if (u) ents.get(u.id).wob = 0; sel = null; }
     for (const o of shop.offers) if (!o.sold) { o.busy = true; suck(o.item); wait(.15).then(() => sink(o.ped)); }
     shop = null; sfx.click();
-    if (run.pvp) return run.who ? pvpBattle() : pvpDraft(1);
+    if (run.pvp) return run.who ? pvpBattle() : pvpShop(1);
     run.round++; nextFight(); hud();
   }
   $('#go').onclick = go;
@@ -930,7 +996,7 @@
     if (phase !== 'player') return;
     const st = B.st, m = sel != null && selMoves.find(m => m.t === i);
     if (m) return playerMove(m);
-    if (st.again != null) { deselect(); R.pass(st); return enemyTurn(); } // decline the fury move
+    if (st.again != null) { deselect(); R.pass(st); return B.pvp ? pvpNext() : enemyTurn(); } // decline the fury move
     const p = i >= 0 && st.b[i];
     deselect(); peek = null;
     if (p && p.s === st.turn) select(i);
@@ -946,7 +1012,7 @@
   cv.addEventListener('pointermove', setMouse);
   cv.addEventListener('pointerdown', e => {
     sfx.init(); setMouse(e);
-    if (phase === 'title') { splash(null); sfx.click(); $('#pvp').classList.remove('on'); return run.spun ? nextFight() : spin(); }
+    if (phase === 'title') return; // pick a mode with the buttons
     if (phase === 'lever') return leverGo && leverGo();
     if (phase === 'over') { sfx.click(); return newRun(); }
     downTile = hover; click(hover);
@@ -1100,7 +1166,7 @@
     labels(); tip(); sellBtn();
     if (Q.has('demo') && (demoT -= rdt) < 0) { // self-playing mode for testing
       demoT = .35;
-      if (phase === 'title') { splash(null); run.spun ? nextFight() : spin(); }
+      if (phase === 'title') Q.get('demo') === 'pvp' ? pvpStart() : regularStart(); // ?demo=pvp plays both sides of a match
       else if (phase === 'player') { const m = R.best(B.st, 2); if (m) playerMove(m); }
       else if (phase === 'shop') { const o = shop.offers.find(o => !o.sold && run.gold >= o.price && (o.rel || freeSlot(o.t) >= 0)); if (o) buy(o); else go(); }
       else if (phase === 'choose') choose(pick(choice.opts));

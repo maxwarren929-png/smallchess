@@ -109,9 +109,12 @@
   @keyframes blink { 50% { opacity: .35; } }
   @keyframes slam { from { transform: scale(2.4); opacity: 0; } }
   @keyframes out { to { opacity: 0; transform: scale(.9); } }
-  #pvp { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); display: none; background: #7a2f3a; box-shadow: 0 0 0 4px #120c1c, inset 0 -6px 0 #4f1c25, inset 0 4px 0 #a8495a; }
-  #pvp:hover { background: #943948; transform: translateX(-50%) translateY(-2px); }
-  #pvp.on { display: block; }
+  #modes { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); display: none; gap: 18px; }
+  #modes.on { display: flex; }
+  #modes button { white-space: nowrap; font-size: min(26px, 5.4vw); }
+  #pvp { background: #7a2f3a; box-shadow: 0 0 0 4px #120c1c, inset 0 -6px 0 #4f1c25, inset 0 4px 0 #a8495a; }
+  #pvp:hover { background: #943948; }
+  #track b { font-size: 15px; color: #fff3d6; margin: 0 6px; } #track i.p1.done { background: #8fe0e6; } #track i.p2.done { background: #ff6b5a; }
   #timer b { font-weight: 700; letter-spacing: .06em; } #timer b.p1 { color: #8fe0e6; } #timer b.p2 { color: #ff6b5a; }
 #grainTip{position:fixed;left:50%;bottom:14%;transform:translateX(-50%);padding:6px 14px;background:#140c08e0;border:2px solid #c9a24a;color:#f3d98a;font:bold 14px monospace;letter-spacing:2px;pointer-events:none;opacity:0;z-index:50}
 #grainTip.on{animation:gtip 1.6s ease-out forwards}
@@ -129,7 +132,7 @@
   <div id="bar"><button id="sell" title="Sell selected piece (Del)">&#10005; SELL <i class="coin"></i><span>1</span></button><button id="reroll">&#8635; <i class="coin"></i><span>1</span></button><button id="go">&#9654;</button></div>
   <div id="tip"></div>
   <button id="book" title="Bestiary (B)"><i></i></button>
-  <button id="pvp" title="Two players, one screen">&#9876; PVP</button>
+  <div id="modes"><button id="regular" title="Solo run against the AI">&#9654; REGULAR</button><button id="pvp" title="Two players, one screen">&#9876; PVP</button></div>
   <div id="codex"></div>
   <div id="err"></div>
 </div>

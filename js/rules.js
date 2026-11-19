@@ -9,8 +9,9 @@
   const ORTH = D8.slice(0, 4), DIAG = D8.slice(4);
   const KN = [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]];
 
-  const state = () => ({ b: Array(N).fill(null), f: { shield: 0 }, turn: 0, again: null, w: -1, doom: null, nid: 1e6, fz: null });
-  const clone = st => ({ b: st.b.slice(), f: { ...st.f }, turn: st.turn, again: st.again, w: st.w, doom: st.doom, nid: st.nid, fz: st.fz });
+  // f[s]: relic flags for side s (shield, crown, wings, frenzy, thorns, fuse, scope, saddle, medal)
+  const state = () => ({ b: Array(N).fill(null), f: [{ shield: 0 }, { shield: 0 }], turn: 0, again: null, w: -1, doom: null, nid: 1e6, fz: null });
+  const clone = st => ({ b: st.b.slice(), f: [{ ...st.f[0] }, { ...st.f[1] }], turn: st.turn, again: st.again, w: st.w, doom: st.doom, nid: st.nid, fz: st.fz });
 
   // move: {f, t, k}  k: 0 move, 1 capture, 2 ranged shot (shooter stays), 3 hook pull, 4 ram push, 5 swap with an ally
   // p.hp = hits left (golem), p.dz = stunned by a hook (skips its side's next turn)
@@ -38,19 +39,19 @@
     switch (p.t) {
       case 'P': {
         const d = s ? -1 : 1; step(0, d, 1); step(1, d, 2); step(-1, d, 2);
-        if (!s && st.f.wings) { step(1, 0, 1); step(-1, 0, 1); }
+        if (st.f[s].wings) { step(1, 0, 1); step(-1, 0, 1); }
         break;
       }
-      case 'N': for (const d of KN) step(d[0], d[1], 0); if (!s && st.f.saddle) for (const d of ORTH) step(d[0], d[1], 0); break;
+      case 'N': for (const d of KN) step(d[0], d[1], 0); if (st.f[s].saddle) for (const d of ORTH) step(d[0], d[1], 0); break;
       case 'B': slide(DIAG, 9); break;
       case 'R': slide(ORTH, 9); break;
       case 'Q': slide(D8, 9); break;
-      case 'K': if (!s && st.f.crown) slide(D8, 2); else for (const d of D8) step(d[0], d[1], 0); break;
+      case 'K': if (st.f[s].crown) slide(D8, 2); else for (const d of D8) step(d[0], d[1], 0); break;
       case 'F': for (const d of D8) step(d[0] * 2, d[1] * 2, 0); for (const d of ORTH) step(d[0], d[1], 1); break;
       case 'X': for (const d of D8) step(d[0], d[1], 0); break;
       case 'G': slide(DIAG, 2, true); break;
       case 'C': case 'H': { // cannon shoots the first piece in a line; hook pulls it next to itself (and can bite adjacent foes)
-        const hook = p.t === 'H', rng = (hook ? 4 : 3) + (!s && st.f.scope ? 3 : 0);
+        const hook = p.t === 'H', rng = (hook ? 4 : 3) + (st.f[s].scope ? 3 : 0);
         for (const d of ORTH) step(d[0], d[1], hook ? 0 : 1);
         for (const [dx, dy] of ORTH) {
           let nx = x + dx, ny = y + dy, r = 0;
@@ -114,7 +115,7 @@
   // Remove the piece on tile j (shield / hit points may save it). src = tile idx or world pos of the cause.
   function kill(st, j, ev, src, boomQ) {
     const q = st.b[j]; if (!q) return false;
-    if (q.s === 0 && st.f.shield > 0) { st.f.shield--; ev && ev.push({ e: 'shield', id: q.id, at: j }); return false; }
+    if (st.f[q.s].shield > 0) { st.f[q.s].shield--; ev && ev.push({ e: 'shield', id: q.id, at: j }); return false; }
     if (q.hp > 1) { st.b[j] = { ...q, hp: q.hp - 1 }; ev && ev.push({ e: 'hit', id: q.id, at: j }); return false; }
     st.b[j] = null; if (q.t === 'K') st.w = 1 - q.s;
     ev && ev.push({ e: 'die', id: q.id, at: j, src });
@@ -123,7 +124,7 @@
   }
   // after-death effects: bombs go off, slimes split into pawns
   function gone(st, q, j, ev, boomQ) {
-    if (q.t === 'X') boomQ.push({ at: j, r: !q.s && st.f.fuse ? 2 : 1 });
+    if (q.t === 'X') boomQ.push({ at: j, r: st.f[q.s].fuse ? 2 : 1 });
     if (q.t === 'S') {
       const x = j % W, y = (j / W) | 0; let n = 2;
       for (const [dx, dy] of D8) {
@@ -175,8 +176,8 @@
       if (!st.b[m.t]) { st.b[m.f] = null; st.b[m.t] = p; ev && ev.push({ e: 'move', id: p.id, f: m.f, t: m.t, cap: null }); }
     } else {
       const q = st.b[m.t];
-      if (q && q.s === 0 && st.f.shield > 0) { // blocked: attacker bounces off
-        st.f.shield--;
+      if (q && st.f[q.s].shield > 0) { // blocked: attacker bounces off
+        st.f[q.s].shield--;
         ev && ev.push({ e: 'bump', id: p.id, f: m.f, t: m.t });
         return end(st);
       }
@@ -190,21 +191,40 @@
       if (q) {
         cap = true;
         if (q.t === 'K') st.w = 1 - q.s;
-        if (p.t === 'X') { st.b[m.t] = null; ev && ev.push({ e: 'die', id: p.id, at: m.t, src: m.f }); boomQ.push({ at: m.t, r: !p.s && st.f.fuse ? 2 : 1 }); }
-        else if (q.s === 0 && q.t === 'P' && st.f.thorns && p.t !== 'K') kill(st, m.t, ev, m.f, boomQ);
+        if (p.t === 'X') { st.b[m.t] = null; ev && ev.push({ e: 'die', id: p.id, at: m.t, src: m.f }); boomQ.push({ at: m.t, r: st.f[p.s].fuse ? 2 : 1 }); }
+        else if (q.t === 'P' && st.f[q.s].thorns && p.t !== 'K') kill(st, m.t, ev, m.f, boomQ);
         gone(st, q, m.t, ev, boomQ);
         const v = st.b[m.t];
         if (v && v.id === p.id && p.t === 'V' && (v.kills || 0) < 3) { st.b[m.t] = { ...v, kills: (v.kills || 0) + 1 }; ev && ev.push({ e: 'grow', id: p.id, at: m.t }); }
       }
       const pp = st.b[m.t], row = (m.t / W) | 0;
-      if (pp && pp.t === 'P' && (row === (pp.s ? 0 : H - 1) || (!pp.s && st.f.medal && row === H - 2))) {
+      if (pp && pp.t === 'P' && (row === (pp.s ? 0 : H - 1) || (st.f[pp.s].medal && row === (pp.s ? 1 : H - 2)))) {
         st.b[m.t] = { ...pp, t: 'Q', hp: 1 }; ev && ev.push({ e: 'promo', id: pp.id, at: m.t });
       }
     }
     booms(st, ev, boomQ);
     const still = st.b[m.k === 2 || m.k === 3 ? m.f : m.t];
-    if (cap && p.s === 0 && st.f.frenzy && st.again == null && still && still.id === p.id && st.w < 0) st.again = p.id;
+    if (cap && st.f[p.s].frenzy && st.again == null && still && still.id === p.id && st.w < 0) st.again = p.id;
     else end(st);
+  }
+
+  // Can side s take the enemy king with its very next move (as if it were s's turn right now)?
+  function threat(st, s) {
+    const c = clone(st); c.again = null; c.turn = s;
+    for (const m of all(c, s)) { const d = clone(c); apply(d, m, null); if (d.w === s) return true; }
+    return false;
+  }
+  // For the side to move: 0 = fine, 1 = checkmate (every move loses the king, and it's attacked now),
+  // 2 = stalemate (not attacked, but every move -- or having no move at all -- hands the king over).
+  // Conservative: a fury bonus move counts as an escape, so it never calls mate too early.
+  function status(st) {
+    const s = st.turn, o = 1 - s;
+    for (const m of all(st, s)) {
+      const c = clone(st); apply(c, m, null);
+      if (c.w === s || c.turn === s) return 0;
+      if (c.w < 0 && !threat(c, o)) return 0;
+    }
+    return threat(st, o) ? 1 : 2;
   }
 
   function evalS(st, s) {
@@ -252,5 +272,5 @@
     return bm;
   }
 
-  G.R = { W, H, N, VAL, hpOf, state, clone, moves, all, apply, kill, booms, best, pass: end };
+  G.R = { W, H, N, VAL, hpOf, state, clone, moves, all, apply, kill, booms, best, pass: end, status, threat };
 })(typeof window !== 'undefined' ? (window.CL = window.CL || {}) : (globalThis.CL = globalThis.CL || {}));
